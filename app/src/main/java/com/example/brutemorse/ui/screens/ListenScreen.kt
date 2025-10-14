@@ -8,18 +8,18 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.FastForward
-import androidx.compose.material.icons.filled.FastRewind
+import androidx.compose.material.icons.automirrored.filled.FastForward
+import androidx.compose.material.icons.automirrored.filled.FastRewind
 import androidx.compose.material.icons.filled.KeyboardDoubleArrowRight
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -42,6 +42,7 @@ fun ListenScreen(
     onOpenSettings: () -> Unit
 ) {
     val currentStep = state.currentStep
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -55,7 +56,7 @@ fun ListenScreen(
         ) {
             Text("≡ Listen", style = MaterialTheme.typography.titleLarge)
             IconButton(onClick = onOpenSettings) {
-                Icon(Icons.Default.Menu, contentDescription = "Settings")
+                Icon(imageVector = Icons.Filled.Menu, contentDescription = "Open settings")
             }
         }
 
@@ -82,6 +83,7 @@ fun ListenScreen(
 @Composable
 private fun PhaseHeader(state: PlaybackUiState) {
     val descriptor = state.currentStep?.descriptor ?: return
+
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.elevatedCardColors()
@@ -131,9 +133,7 @@ private fun PlaybackVisualizer(elements: List<PlaybackElement>) {
                 text = morse?.character ?: "Waiting",
                 style = MaterialTheme.typography.titleLarge
             )
-            speech?.let {
-                Text(text = it.text, style = MaterialTheme.typography.bodyLarge)
-            }
+            speech?.let { Text(text = it.text, style = MaterialTheme.typography.bodyLarge) }
         }
     }
 }
@@ -175,19 +175,28 @@ private fun PlaybackControls(
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onSkipPrevious) {
-                Icon(Icons.Filled.FastRewind, contentDescription = "Previous")
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.FastRewind,
+                    contentDescription = "Previous"
+                )
             }
             IconButton(onClick = onPlayPause) {
                 Icon(
-                    if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                    imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
                     contentDescription = if (isPlaying) "Pause" else "Play"
                 )
             }
             IconButton(onClick = onSkipNext) {
-                Icon(Icons.Filled.FastForward, contentDescription = "Next")
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.FastForward,
+                    contentDescription = "Next"
+                )
             }
             IconButton(onClick = onSkipPhase) {
-                Icon(Icons.Filled.KeyboardDoubleArrowRight, contentDescription = "Next phase")
+                Icon(
+                    imageVector = Icons.Filled.KeyboardDoubleArrowRight,
+                    contentDescription = "Next phase"
+                )
             }
         }
     }
@@ -202,7 +211,10 @@ private fun EmptyState() {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text("Press start to generate a marathon session", style = MaterialTheme.typography.bodyLarge)
+        Text(
+            "Press start to generate a marathon session",
+            style = MaterialTheme.typography.bodyLarge
+        )
     }
 }
 
