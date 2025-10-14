@@ -2,6 +2,7 @@ package com.example.brutemorse.ui.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.runtime.collectAsState
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -47,7 +48,7 @@ fun BruteMorseNavHost(
         }
         composable(Screen.Listen.route) {
             ListenScreen(
-                state = playbackViewModel.uiState.value,
+                state = playbackViewModel.uiState.collectAsState().value,
                 onPlayPause = playbackViewModel::togglePlayback,
                 onSkipNext = playbackViewModel::skipNext,
                 onSkipPrevious = playbackViewModel::skipPrevious,
