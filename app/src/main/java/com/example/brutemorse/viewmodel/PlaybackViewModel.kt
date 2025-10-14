@@ -7,11 +7,14 @@ import com.example.brutemorse.data.SessionRepository
 import com.example.brutemorse.data.SettingsRepository
 import com.example.brutemorse.audio.MorseAudioPlayer
 import com.example.brutemorse.audio.TextToSpeechPlayer
+import com.example.brutemorse.audio.MorseInputDetector
+import com.example.brutemorse.audio.MorseInputEvent
 import com.example.brutemorse.model.MorseElement
 import com.example.brutemorse.model.SpeechElement
 import com.example.brutemorse.data.UserSettings
 import com.example.brutemorse.model.SessionStep
 import com.example.brutemorse.model.ScenarioScript
+import com.example.brutemorse.model.MorseDefinitions
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,14 +34,33 @@ class PlaybackViewModel(
     private val _settingsState = MutableStateFlow(UserSettings())
     val settingsState: StateFlow<UserSettings> = _settingsState.asStateFlow()
 
+    private val _activeState = MutableStateFlow(ActiveUiState())
+    val activeState: StateFlow<ActiveUiState> = _activeState.asStateFlow()
+
     val scenarios: List<ScenarioScript> = sessionRepository.scenarios
 
     private var session: List<SessionStep> = emptyList()
     private var tickerJob: Job? = null
     private var playbackJob: Job? = null
     private var stepOffsets: List<Long> = emptyList()
-    private val audioPlayer = MorseAudioPlayer()
+    private val audioPlayer = MorseAudioPlayer(context)
     private val ttsPlayer = TextToSpeechPlayer(context)
+
+    private var inputDetector = MorseInputDetector(wpm = 25)
+    private var activeSession: List<SessionStep> = emptyList()
+    private var currentStepIndex = 0
+    private var completionCheckJob: Job? = null
+    private var audioInputEnabled = false
+
+    // Store completed results history
+    private data class CompletedSet(
+        val stepIndex: Int,
+        val tokens: List<String>,
+        val attempts: List<CharacterAttempt>,
+        val score: Pair<Int, Int>,
+        val descriptor: com.example.brutemorse.model.PhaseDescriptor
+    )
+    private val completedSets = mutableListOf<CompletedSet>()
 
     init {
         viewModelScope.launch {
@@ -96,6 +118,11 @@ class PlaybackViewModel(
         playbackJob?.cancel()
     }
 
+    fun pausePlayback() {
+        // Called when leaving Listen screen
+        pause()
+    }
+
     fun skipNext() {
         if (session.isEmpty()) return
         val nextIndex = (_uiState.value.currentIndex + 1).coerceAtMost(session.lastIndex)
@@ -122,6 +149,33 @@ class PlaybackViewModel(
         }
         if (nextPhaseIndex != -1) {
             updateIndex(nextPhaseIndex)
+            if (_uiState.value.isPlaying) {
+                startPlayback()
+            }
+        }
+    }
+
+    fun jumpToPhase(phaseNumber: Int) {
+        if (session.isEmpty()) return
+        val phaseStartIndex = session.indexOfFirst { step ->
+            step.descriptor.phaseIndex == phaseNumber
+        }
+        if (phaseStartIndex != -1) {
+            updateIndex(phaseStartIndex)
+            if (_uiState.value.isPlaying) {
+                startPlayback()
+            }
+        }
+    }
+
+    fun jumpToSubPhase(phaseNumber: Int, subPhaseNumber: Int) {
+        if (session.isEmpty()) return
+        val subPhaseStartIndex = session.indexOfFirst { step ->
+            step.descriptor.phaseIndex == phaseNumber &&
+                    step.descriptor.subPhaseIndex == subPhaseNumber
+        }
+        if (subPhaseStartIndex != -1) {
+            updateIndex(subPhaseStartIndex)
             if (_uiState.value.isPlaying) {
                 startPlayback()
             }
@@ -216,12 +270,220 @@ class PlaybackViewModel(
         }
     }
 
+    // Active Practice Methods
+
+    fun generateActiveSession() {
+        viewModelScope.launch {
+            val settings = settingsState.value
+            activeSession = sessionRepository.generateSession(settings)
+            currentStepIndex = 0
+            completedSets.clear()
+
+            if (activeSession.isEmpty()) {
+                _activeState.value = ActiveUiState()
+                return@launch
+            }
+
+            loadActiveStep(0)
+        }
+    }
+
+    fun enableAudioInput() {
+        try {
+            audioInputEnabled = true
+            // Use audio detection for straight key
+            inputDetector.startAudioListening()
+        } catch (e: Exception) {
+            // Audio failed - that's okay, screen tap still works
+            e.printStackTrace()
+            audioInputEnabled = false
+        }
+    }
+
+    private fun loadActiveStep(index: Int) {
+        if (index >= activeSession.size) {
+            // Session complete
+            _activeState.value = ActiveUiState()
+            if (audioInputEnabled) {
+                inputDetector.stopAudioListening()
+            }
+            return
+        }
+
+        val step = activeSession[index]
+        currentStepIndex = index
+
+        // Extract tokens from step (only morse elements with distinct characters)
+        val tokens = step.elements
+            .filterIsInstance<MorseElement>()
+            .map { it.character }
+            .distinct()
+
+        _activeState.value = ActiveUiState(
+            currentTokens = tokens,
+            currentPosition = 0,
+            currentInput = "",
+            attempts = emptyList(),
+            isReviewMode = false,
+            phaseDescriptor = step.descriptor,
+            passIndex = step.passIndex,
+            totalPasses = step.passCount
+        )
+
+        // Start completion checker
+        startCompletionChecker()
+    }
+
+    fun onActiveKeyDown() {
+        inputDetector.onKeyDown()
+    }
+
+    fun onActiveKeyUp() {
+        inputDetector.onKeyUp()
+        _activeState.value = _activeState.value.copy(
+            currentInput = inputDetector.currentInput.value
+        )
+    }
+
+    private fun startCompletionChecker() {
+        completionCheckJob?.cancel()
+        completionCheckJob = viewModelScope.launch {
+            while (true) {
+                delay(100)
+                val state = _activeState.value
+
+                if (!state.isReviewMode) {
+                    // Determine timeout based on whether we're doing single letters or phrases
+                    val isSingleLetterDrill = state.currentTokens.size <= 3 &&
+                            state.currentTokens.all { it.length == 1 }
+
+                    // Shorter timeout for single letters, longer for phrases
+                    val timeoutMs = if (isSingleLetterDrill) 800L else 2500L
+
+                    // Check if current character is complete
+                    val event = inputDetector.checkCompletion(completionTimeoutMs = timeoutMs)
+
+                    if (event != null) {
+                        handleCharacterComplete(event)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun handleCharacterComplete(event: MorseInputEvent) {
+        val state = _activeState.value
+        val expectedChar = state.currentTokens.getOrNull(state.currentPosition) ?: return
+        val expectedPattern = MorseDefinitions.morseMap[expectedChar] ?: ""
+
+        // Convert to display format (• and —)
+        val expectedDisplay = expectedPattern.replace(".", "•").replace("-", "—")
+
+        val attempt = CharacterAttempt(
+            expectedChar = expectedChar,
+            expectedPattern = expectedDisplay,
+            userPattern = event.pattern,
+            isCorrect = event.pattern == expectedDisplay
+        )
+
+        val newAttempts = state.attempts + attempt
+        val newPosition = state.currentPosition + 1
+
+        if (newPosition >= state.currentTokens.size) {
+            // All characters complete, show review
+            val correct = newAttempts.count { it.isCorrect }
+            val total = newAttempts.size
+
+            // Save to history
+            val completed = CompletedSet(
+                stepIndex = currentStepIndex,
+                tokens = state.currentTokens,
+                attempts = newAttempts,
+                score = correct to total,
+                descriptor = state.phaseDescriptor!!
+            )
+            completedSets.add(completed)
+
+            _activeState.value = state.copy(
+                attempts = newAttempts,
+                isReviewMode = true,
+                score = correct to total,
+                currentInput = ""
+            )
+
+            completionCheckJob?.cancel()
+        } else {
+            // Move to next character
+            _activeState.value = state.copy(
+                currentPosition = newPosition,
+                currentInput = "",
+                attempts = newAttempts
+            )
+            inputDetector.reset()
+        }
+    }
+
+    fun onActiveNextSet() {
+        loadActiveStep(currentStepIndex + 1)
+    }
+
+    fun onActiveBackToResults() {
+        // Go back to previous completed set's results
+        if (completedSets.size >= 2) {
+            // Remove current set from history
+            completedSets.removeLastOrNull()
+
+            // Get previous set
+            val previousSet = completedSets.lastOrNull()
+            if (previousSet != null) {
+                currentStepIndex = previousSet.stepIndex
+                _activeState.value = ActiveUiState(
+                    currentTokens = previousSet.tokens,
+                    currentPosition = previousSet.tokens.size, // Already completed
+                    currentInput = "",
+                    attempts = previousSet.attempts,
+                    isReviewMode = true,
+                    score = previousSet.score,
+                    phaseDescriptor = previousSet.descriptor,
+                    passIndex = previousSet.descriptor.phaseIndex,
+                    totalPasses = activeSession.size
+                )
+            }
+        }
+        // If only 1 or 0 completed sets, do nothing (stay on current results)
+    }
+
+    fun jumpToPhaseActive(phaseNumber: Int) {
+        if (activeSession.isEmpty()) return
+        val phaseStartIndex = activeSession.indexOfFirst { step ->
+            step.descriptor.phaseIndex == phaseNumber
+        }
+        if (phaseStartIndex != -1) {
+            loadActiveStep(phaseStartIndex)
+        }
+    }
+
+    fun jumpToSubPhaseActive(phaseNumber: Int, subPhaseNumber: Int) {
+        if (activeSession.isEmpty()) return
+        val subPhaseStartIndex = activeSession.indexOfFirst { step ->
+            step.descriptor.phaseIndex == phaseNumber &&
+                    step.descriptor.subPhaseIndex == subPhaseNumber
+        }
+        if (subPhaseStartIndex != -1) {
+            loadActiveStep(subPhaseStartIndex)
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
         tickerJob?.cancel()
         playbackJob?.cancel()
+        completionCheckJob?.cancel()
         audioPlayer.release()
         ttsPlayer.release()
+        if (audioInputEnabled) {
+            inputDetector.stopAudioListening()
+        }
     }
 }
 

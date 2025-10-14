@@ -369,10 +369,12 @@ class SessionRepository(private val settingsRepository: SettingsRepository) {
 
     private fun bctTraversal(center: Int, size: Int, direction: Int, coprime: Int): List<Int> {
         val sequence = mutableListOf<Int>()
+        // Add random starting offset to avoid always starting at same position
+        val randomOffset = kotlin.random.Random.nextInt(size)
         for (i in 0 until size) {
             val offset = ceil(i / 2.0).toInt()
             val sign = if ((i + 1) % 2 == 0) -1 else 1
-            val position = (center + direction * coprime * sign * offset).mod(size)
+            val position = (center + direction * coprime * sign * offset + randomOffset).mod(size)
             sequence += position
         }
         return sequence

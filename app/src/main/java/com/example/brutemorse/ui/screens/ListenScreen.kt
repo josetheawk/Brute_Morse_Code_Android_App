@@ -1,30 +1,39 @@
 package com.example.brutemorse.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.KeyboardDoubleArrowRight
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.brutemorse.model.MorseElement
@@ -33,20 +42,140 @@ import com.example.brutemorse.model.SpeechElement
 import com.example.brutemorse.viewmodel.PlaybackUiState
 
 @Composable
+private fun PhaseNavigationButtons(
+    currentPhase: Int,
+    currentSubPhase: Int,
+    onPhaseSelect: (Int) -> Unit,
+    onSubPhaseSelect: (Int, Int) -> Unit
+) {
+    val phases = listOf(
+        1 to "Alphabet Mastery",
+        2 to "Expanded Set",
+        3 to "Words & Abbreviations",
+        4 to "Real World QSOs"
+    )
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        phases.forEach { (phase, label) ->
+            val isCurrentPhase = phase == currentPhase
+
+            // Phase button
+            Button(
+                onClick = { onPhaseSelect(phase) },
+                modifier = Modifier.fillMaxWidth(),
+                colors = if (isCurrentPhase) {
+                    androidx.compose.material3.ButtonDefaults.buttonColors()
+                } else {
+                    androidx.compose.material3.ButtonDefaults.outlinedButtonColors()
+                }
+            ) {
+                Text("Phase $phase: $label")
+            }
+
+            // Auto-expand current phase to show subphases
+            if (isCurrentPhase) {
+                SubPhaseList(
+                    phase = phase,
+                    currentSubPhase = currentSubPhase,
+                    onSubPhaseSelect = onSubPhaseSelect
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SubPhaseList(
+    phase: Int,
+    currentSubPhase: Int,
+    onSubPhaseSelect: (Int, Int) -> Unit
+) {
+    val subPhases = when (phase) {
+        1 -> listOf(
+            1 to "NestedID Forward",
+            2 to "BCT Traversal",
+            3 to "Digraph Build",
+            4 to "Tongue Twisters"
+        )
+        2 -> listOf(
+            1 to "Nested Numbers",
+            2 to "Full BCT Mix",
+            3 to "Number/Letter Confusion",
+            4 to "Number Sequences"
+        )
+        3 -> listOf(
+            1 to "Ham Vocabulary",
+            2 to "Q-Code Drills",
+            3 to "Reduced Vocal",
+            4 to "Mixed Confusion"
+        )
+        4 -> listOf(
+            0 to "Vocab Review",
+            1 to "Normal QSOs",
+            5 to "SKYWARN",
+            9 to "Apocalypse"
+        )
+        else -> emptyList()
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Column(modifier = Modifier.padding(8.dp)) {
+            subPhases.forEach { (subPhaseNum, subPhaseLabel) ->
+                val isCurrentSubPhase = subPhaseNum == currentSubPhase
+                Text(
+                    text = "${phase}.${subPhaseNum}: $subPhaseLabel",
+                    style = if (isCurrentSubPhase) {
+                        MaterialTheme.typography.bodyMedium.copy(
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
+                        )
+                    } else {
+                        MaterialTheme.typography.bodySmall
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onSubPhaseSelect(phase, subPhaseNum) }
+                        .padding(vertical = 4.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
 fun ListenScreen(
     state: PlaybackUiState,
     onPlayPause: () -> Unit,
     onSkipNext: () -> Unit,
     onSkipPrevious: () -> Unit,
     onSkipPhase: () -> Unit,
-    onOpenSettings: () -> Unit
+    onOpenSettings: () -> Unit,
+    onNavigateHome: () -> Unit = {},
+    onPauseOnExit: () -> Unit = {},
+    onJumpToPhase: (Int) -> Unit = {},
+    onJumpToSubPhase: (Int, Int) -> Unit = { _, _ -> }
 ) {
     val currentStep = state.currentStep
+    val scrollState = rememberScrollState()
+
+    // Pause playback when leaving this screen
+    DisposableEffect(Unit) {
+        onDispose {
+            onPauseOnExit()
+        }
+    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(24.dp),
+            .padding(24.dp)
+            .verticalScroll(scrollState),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Row(
@@ -54,6 +183,9 @@ fun ListenScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
+            IconButton(onClick = onNavigateHome) {
+                Icon(imageVector = Icons.Filled.Home, contentDescription = "Home")
+            }
             Text("Listen", style = MaterialTheme.typography.titleLarge)
             IconButton(onClick = onOpenSettings) {
                 Icon(imageVector = Icons.Filled.Menu, contentDescription = "Open settings")
@@ -68,7 +200,8 @@ fun ListenScreen(
             EmptyState()
         }
 
-        Spacer(modifier = Modifier.weight(1f))
+        // Fixed spacer instead of weighted
+        Spacer(modifier = Modifier.height(16.dp))
 
         PlaybackControls(
             isPlaying = state.isPlaying,
@@ -77,6 +210,22 @@ fun ListenScreen(
             onSkipPrevious = onSkipPrevious,
             onSkipPhase = onSkipPhase
         )
+
+        if (currentStep != null) {
+            // Divider before phase navigation
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = 8.dp),
+                thickness = 2.dp,
+                color = MaterialTheme.colorScheme.outlineVariant
+            )
+
+            PhaseNavigationButtons(
+                currentPhase = state.currentStep?.descriptor?.phaseIndex ?: 1,
+                currentSubPhase = state.currentStep?.descriptor?.subPhaseIndex ?: 1,
+                onPhaseSelect = onJumpToPhase,
+                onSubPhaseSelect = onJumpToSubPhase
+            )
+        }
     }
 }
 
@@ -124,12 +273,18 @@ private fun PlaybackVisualizer(elements: List<PlaybackElement>) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // During morse: show ONLY morse pattern
+            // During morse: show ONLY morse pattern (with nice symbols)
             // During speech: show ONLY letter
             // Otherwise: blank
             if (morse != null) {
+                // Convert old symbols to nice ones
+                val displaySymbol = morse.symbol
+                    .replace(".", "•")
+                    .replace("-", "—")
+                    .replace("·", "•")  // In case old symbol is there
+
                 Text(
-                    text = morse.symbol,
+                    text = displaySymbol,
                     style = MaterialTheme.typography.displayLarge,
                     textAlign = TextAlign.Center
                 )

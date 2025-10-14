@@ -1,54 +1,70 @@
 package com.example.brutemorse.audio
 
+import android.content.Context
 import android.media.AudioAttributes
 import android.media.AudioFormat
+import android.media.AudioManager
 import android.media.AudioTrack
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.math.sin
 
-class MorseAudioPlayer {
+class MorseAudioPlayer(private val context: Context) {
 
     suspend fun playMorsePattern(
         pattern: String,
         frequencyHz: Int,
         wpm: Int
     ) = withContext(Dispatchers.IO) {
-        val unitMs = (1200f / wpm).toLong()
-        val sampleRate = 44100
+        // Force audio to phone speaker
+        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val previousMode = audioManager.mode
+        val previousSpeakerphone = audioManager.isSpeakerphoneOn
 
-        // Calculate total duration and generate complete audio buffer
-        val totalDurationMs = calculatePatternDuration(pattern, unitMs)
-        val totalSamples = (totalDurationMs * sampleRate / 1000).toInt()
-        val samples = ShortArray(totalSamples)
+        audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+        audioManager.isSpeakerphoneOn = true
 
-        // Generate the complete morse pattern with precise timing
-        var currentSampleOffset = 0
+        try {
+            val unitMs = (1200f / wpm).toLong()
+            val sampleRate = 44100
 
-        pattern.forEach { char ->
-            val elementDurationMs = when (char) {
-                '.', '·', '•' -> unitMs        // Dit
-                '-', '−', '–', '—' -> unitMs * 3   // Dah
-                ' ' -> unitMs * 3               // Word space (just silence)
-                else -> 0L
+            // Calculate total duration and generate complete audio buffer
+            val totalDurationMs = calculatePatternDuration(pattern, unitMs)
+            val totalSamples = (totalDurationMs * sampleRate / 1000).toInt()
+            val samples = ShortArray(totalSamples)
+
+            // Generate the complete morse pattern with precise timing
+            var currentSampleOffset = 0
+
+            pattern.forEach { char ->
+                val elementDurationMs = when (char) {
+                    '.', '·', '•' -> unitMs        // Dit
+                    '-', '−', '–', '—' -> unitMs * 3   // Dah
+                    ' ' -> unitMs * 3               // Word space (just silence)
+                    else -> 0L
+                }
+
+                if (elementDurationMs > 0 && char != ' ') {
+                    // Generate tone for dit/dah
+                    val elementSamples = (elementDurationMs * sampleRate / 1000).toInt()
+                    generateTone(samples, currentSampleOffset, elementSamples, frequencyHz, sampleRate)
+                    currentSampleOffset += elementSamples
+                } else if (char == ' ') {
+                    // Just advance for space (silence)
+                    currentSampleOffset += (elementDurationMs * sampleRate / 1000).toInt()
+                }
+
+                // Add gap after element (1 unit of silence)
+                currentSampleOffset += (unitMs * sampleRate / 1000).toInt()
             }
 
-            if (elementDurationMs > 0 && char != ' ') {
-                // Generate tone for dit/dah
-                val elementSamples = (elementDurationMs * sampleRate / 1000).toInt()
-                generateTone(samples, currentSampleOffset, elementSamples, frequencyHz, sampleRate)
-                currentSampleOffset += elementSamples
-            } else if (char == ' ') {
-                // Just advance for space (silence)
-                currentSampleOffset += (elementDurationMs * sampleRate / 1000).toInt()
-            }
-
-            // Add gap after element (1 unit of silence)
-            currentSampleOffset += (unitMs * sampleRate / 1000).toInt()
+            // Play the complete buffer
+            playAudioBuffer(samples, sampleRate)
+        } finally {
+            // Restore previous audio mode
+            audioManager.mode = previousMode
+            audioManager.isSpeakerphoneOn = previousSpeakerphone
         }
-
-        // Play the complete buffer
-        playAudioBuffer(samples, sampleRate)
     }
 
     private fun calculatePatternDuration(pattern: String, unitMs: Long): Long {

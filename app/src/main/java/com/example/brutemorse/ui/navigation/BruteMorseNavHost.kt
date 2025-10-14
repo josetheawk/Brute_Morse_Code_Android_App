@@ -8,6 +8,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.brutemorse.LocalPlaybackViewModel
+import com.example.brutemorse.ui.screens.ActiveScreen
 import com.example.brutemorse.ui.screens.ListenScreen
 import com.example.brutemorse.ui.screens.ScenarioLibraryScreen
 import com.example.brutemorse.ui.screens.SettingsScreen
@@ -16,6 +17,7 @@ import com.example.brutemorse.ui.screens.SetupScreen
 sealed class Screen(val route: String) {
     data object Setup : Screen("setup")
     data object Listen : Screen("listen")
+    data object Active : Screen("active")
     data object Settings : Screen("settings")
     data object Scenarios : Screen("scenarios")
 }
@@ -36,11 +38,13 @@ fun BruteMorseNavHost(
             SetupScreen(
                 onStartTraining = {
                     playbackViewModel.generateSession()
-                    navController.navigate(Screen.Listen.route) {
-                        popUpTo(Screen.Setup.route) { inclusive = true }
-                    }
+                    navController.navigate(Screen.Listen.route)
                 },
-                settingsState = playbackViewModel.settingsState.collectAsState().value,  // ✅ REACTIVE!
+                onStartActive = {
+                    playbackViewModel.generateActiveSession()
+                    navController.navigate(Screen.Active.route)
+                },
+                settingsState = playbackViewModel.settingsState.collectAsState().value,
                 onSettingsChange = playbackViewModel::updateSettings,
                 onOpenSettings = { navController.navigate(Screen.Settings.route) },
                 onOpenScenarios = { navController.navigate(Screen.Scenarios.route) }
@@ -53,7 +57,33 @@ fun BruteMorseNavHost(
                 onSkipNext = playbackViewModel::skipNext,
                 onSkipPrevious = playbackViewModel::skipPrevious,
                 onSkipPhase = playbackViewModel::skipPhase,
-                onOpenSettings = { navController.navigate(Screen.Settings.route) }
+                onOpenSettings = { navController.navigate(Screen.Settings.route) },
+                onNavigateHome = {
+                    navController.navigate(Screen.Setup.route) {
+                        popUpTo(Screen.Setup.route) { inclusive = true }
+                    }
+                },
+                onPauseOnExit = playbackViewModel::pausePlayback,
+                onJumpToPhase = playbackViewModel::jumpToPhase,
+                onJumpToSubPhase = playbackViewModel::jumpToSubPhase
+            )
+        }
+        composable(Screen.Active.route) {
+            ActiveScreen(
+                state = playbackViewModel.activeState.collectAsState().value,
+                onKeyDown = playbackViewModel::onActiveKeyDown,
+                onKeyUp = playbackViewModel::onActiveKeyUp,
+                onNextSet = playbackViewModel::onActiveNextSet,
+                onBack = playbackViewModel::onActiveBackToResults,
+                onOpenSettings = { navController.navigate(Screen.Settings.route) },
+                onNavigateHome = {
+                    navController.navigate(Screen.Setup.route) {
+                        popUpTo(Screen.Setup.route) { inclusive = true }
+                    }
+                },
+                onEnableAudioInput = playbackViewModel::enableAudioInput,
+                onJumpToPhase = playbackViewModel::jumpToPhaseActive,
+                onJumpToSubPhase = playbackViewModel::jumpToSubPhaseActive
             )
         }
         composable(Screen.Settings.route) {
