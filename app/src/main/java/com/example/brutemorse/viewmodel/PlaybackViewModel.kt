@@ -5,6 +5,8 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.brutemorse.data.SessionRepository
 import com.example.brutemorse.data.SettingsRepository
+import com.example.brutemorse.audio.MorseAudioPlayer
+import com.example.brutemorse.model.MorseElement
 import com.example.brutemorse.data.UserSettings
 import com.example.brutemorse.model.SessionStep
 import com.example.brutemorse.model.ScenarioScript
@@ -30,7 +32,9 @@ class PlaybackViewModel(
 
     private var session: List<SessionStep> = emptyList()
     private var tickerJob: Job? = null
+    private var playbackJob: Job? = null
     private var stepOffsets: List<Long> = emptyList()
+    private val audioPlayer = MorseAudioPlayer()
 
     init {
         viewModelScope.launch {
@@ -63,7 +67,7 @@ class PlaybackViewModel(
                 elapsedMillis = 0L,
                 totalMillis = running
             )
-            startTicker()
+            startPlayback()
         }
     }
 
@@ -79,24 +83,31 @@ class PlaybackViewModel(
     private fun play() {
         if (session.isEmpty()) return
         _uiState.value = _uiState.value.copy(isPlaying = true)
-        startTicker()
+        startPlayback()
     }
 
     private fun pause() {
         _uiState.value = _uiState.value.copy(isPlaying = false)
         tickerJob?.cancel()
+        playbackJob?.cancel()
     }
 
     fun skipNext() {
         if (session.isEmpty()) return
         val nextIndex = (_uiState.value.currentIndex + 1).coerceAtMost(session.lastIndex)
         updateIndex(nextIndex)
+        if (_uiState.value.isPlaying) {
+            startPlayback()
+        }
     }
 
     fun skipPrevious() {
         if (session.isEmpty()) return
         val previousIndex = (_uiState.value.currentIndex - 1).coerceAtLeast(0)
         updateIndex(previousIndex)
+        if (_uiState.value.isPlaying) {
+            startPlayback()
+        }
     }
 
     fun skipPhase() {
@@ -107,6 +118,9 @@ class PlaybackViewModel(
         }
         if (nextPhaseIndex != -1) {
             updateIndex(nextPhaseIndex)
+            if (_uiState.value.isPlaying) {
+                startPlayback()
+            }
         }
     }
 
@@ -118,6 +132,8 @@ class PlaybackViewModel(
 
     private fun updateIndex(index: Int) {
         if (session.isEmpty()) return
+        playbackJob?.cancel()
+        tickerJob?.cancel()
         val newElapsed = stepOffsets.getOrNull(index) ?: 0L
         _uiState.value = _uiState.value.copy(
             currentIndex = index,
@@ -126,28 +142,59 @@ class PlaybackViewModel(
         )
     }
 
-    private fun startTicker() {
+    private fun startPlayback() {
+        playbackJob?.cancel()
         tickerJob?.cancel()
+        
+        // Start UI ticker
         tickerJob = viewModelScope.launch {
-            while (true) {
-                delay(1000)
+            while (_uiState.value.isPlaying) {
+                delay(100)
                 val snapshot = _uiState.value
-                if (!snapshot.isPlaying) continue
                 val total = snapshot.totalMillis
                 if (total == 0L) continue
-                val newElapsed = (snapshot.elapsedMillis + 1000).coerceAtMost(total)
-                if (session.isEmpty() || stepOffsets.isEmpty()) continue
-                val newIndex = stepOffsets.indexOfLast { offset -> offset <= newElapsed }
-                    .coerceAtLeast(0)
-                    .coerceAtMost(session.lastIndex)
+                val newElapsed = (snapshot.elapsedMillis + 100).coerceAtMost(total)
                 val finished = newElapsed >= total
                 _uiState.value = snapshot.copy(
                     elapsedMillis = newElapsed,
-                    currentIndex = newIndex,
-                    currentStep = session.getOrNull(newIndex),
                     isPlaying = if (finished) false else snapshot.isPlaying
                 )
                 if (finished) break
+            }
+        }
+        
+        // Start audio playback
+        playbackJob = viewModelScope.launch {
+            var currentIndex = _uiState.value.currentIndex
+            
+            while (currentIndex < session.size && _uiState.value.isPlaying) {
+                val step = session[currentIndex]
+                _uiState.value = _uiState.value.copy(
+                    currentIndex = currentIndex,
+                    currentStep = step
+                )
+                
+                // Play each element in the step
+                for (element in step.elements) {
+                    if (!_uiState.value.isPlaying) break
+                    
+                    when (element) {
+                        is MorseElement -> {
+                            audioPlayer.playTone(element.toneFrequencyHz, element.durationMillis)
+                        }
+                        else -> {
+                            // For speech/silence/chime, just delay
+                            delay(element.durationMillis)
+                        }
+                    }
+                }
+                
+                currentIndex++
+            }
+            
+            // Finished
+            if (_uiState.value.isPlaying) {
+                _uiState.value = _uiState.value.copy(isPlaying = false)
             }
         }
     }
@@ -155,6 +202,8 @@ class PlaybackViewModel(
     override fun onCleared() {
         super.onCleared()
         tickerJob?.cancel()
+        playbackJob?.cancel()
+        audioPlayer.release()
     }
 }
 
