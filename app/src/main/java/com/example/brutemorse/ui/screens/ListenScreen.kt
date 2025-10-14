@@ -8,8 +8,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.FastForward
-import androidx.compose.material.icons.automirrored.filled.FastRewind
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.KeyboardDoubleArrowRight
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Pause
@@ -149,7 +149,10 @@ private fun PlaybackDetails(state: PlaybackUiState) {
             style = MaterialTheme.typography.bodyLarge
         )
         LinearProgressIndicator(
-            progress = if (state.totalMillis == 0L) 0f else state.elapsedMillis / state.totalMillis.toFloat(),
+            progress = {
+                if (state.totalMillis == 0L) 0f
+                else state.elapsedMillis / state.totalMillis.toFloat()
+            },
             modifier = Modifier.fillMaxWidth()
         )
     }
@@ -176,7 +179,7 @@ private fun PlaybackControls(
         ) {
             IconButton(onClick = onSkipPrevious) {
                 Icon(
-                    imageVector = Icons.AutoMirrored.Filled.FastRewind,
+                    imageVector = Icons.Filled.ArrowBack,
                     contentDescription = "Previous"
                 )
             }
@@ -188,7 +191,7 @@ private fun PlaybackControls(
             }
             IconButton(onClick = onSkipNext) {
                 Icon(
-                    imageVector = Icons.AutoMirrored.Filled.FastForward,
+                    imageVector = Icons.Filled.ArrowForward,
                     contentDescription = "Next"
                 )
             }
