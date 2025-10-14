@@ -14,9 +14,9 @@ DEFAULT_JVM_OPTS=""
 APP_HOME="$(cd "$(dirname "$0")"; pwd -P)"
 APP_NAME="Gradle"
 
-WRAPPER_VERSION="8.9"
+WRAPPER_VERSION="8.7"
 WRAPPER_JAR="$APP_HOME/gradle/wrapper/gradle-wrapper.jar"
-WRAPPER_DIST_URLS="https://services.gradle.org/distributions/gradle-${WRAPPER_VERSION}-all.zip https://downloads.gradle.org/distributions/gradle-${WRAPPER_VERSION}-all.zip"
+WRAPPER_DIST_URLS="https://services.gradle.org/distributions/gradle-${WRAPPER_VERSION}-bin.zip https://downloads.gradle.org/distributions/gradle-${WRAPPER_VERSION}-bin.zip"
 
 log() {
     printf '%s\n' "$*"

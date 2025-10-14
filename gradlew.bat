@@ -6,9 +6,9 @@ set APP_BASE_NAME=%~n0
 set APP_HOME=%DIR%
 
 set DEFAULT_JVM_OPTS=
-set WRAPPER_VERSION=8.9
+set WRAPPER_VERSION=8.7
 set WRAPPER_JAR=%APP_HOME%\gradle\wrapper\gradle-wrapper.jar
-set WRAPPER_DISTS=https://services.gradle.org/distributions/gradle-%WRAPPER_VERSION%-all.zip https://downloads.gradle.org/distributions/gradle-%WRAPPER_VERSION%-all.zip
+set WRAPPER_DISTS=https://services.gradle.org/distributions/gradle-%WRAPPER_VERSION%-bin.zip https://downloads.gradle.org/distributions/gradle-%WRAPPER_VERSION%-bin.zip
 
 if exist "%WRAPPER_JAR%" goto findJavaFromJavaHome
 

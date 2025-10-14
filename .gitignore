@@ -208,6 +208,3 @@ __marimo__/
 
 # Gradle wrapper binary is downloaded on demand.
 gradle/wrapper/gradle-wrapper.jar
-
-# Local Gradle build cache and daemon state.
-.gradle/
