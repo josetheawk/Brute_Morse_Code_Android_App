@@ -54,11 +54,6 @@ android {
     }
 }
 
-repositories {
-    google()
-    mavenCentral()
-}
-
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.05.00")
     val composeMaterialIconsVersion = "1.6.7" // Keep in sync with the Compose BOM above.
