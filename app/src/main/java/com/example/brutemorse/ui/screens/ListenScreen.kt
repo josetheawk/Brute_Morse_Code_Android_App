@@ -54,7 +54,7 @@ fun ListenScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("≡ Listen", style = MaterialTheme.typography.titleLarge)
+            Text("Listen", style = MaterialTheme.typography.titleLarge)
             IconButton(onClick = onOpenSettings) {
                 Icon(imageVector = Icons.Filled.Menu, contentDescription = "Open settings")
             }
@@ -110,8 +110,8 @@ private fun PhaseHeader(state: PlaybackUiState) {
 
 @Composable
 private fun PlaybackVisualizer(elements: List<PlaybackElement>) {
-    val morse = elements.filterIsInstance<MorseElement>().lastOrNull()
-    val speech = elements.filterIsInstance<SpeechElement>().lastOrNull()
+    val morse = elements.filterIsInstance<MorseElement>().firstOrNull()
+    val speech = elements.filterIsInstance<SpeechElement>().firstOrNull()
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -124,16 +124,29 @@ private fun PlaybackVisualizer(elements: List<PlaybackElement>) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(
-                text = morse?.symbol ?: "· · ·",
-                style = MaterialTheme.typography.displayLarge,
-                textAlign = TextAlign.Center
-            )
-            Text(
-                text = morse?.character ?: "Waiting",
-                style = MaterialTheme.typography.titleLarge
-            )
-            speech?.let { Text(text = it.text, style = MaterialTheme.typography.bodyLarge) }
+            // During morse: show ONLY morse pattern
+            // During speech: show ONLY letter
+            // Otherwise: blank
+            if (morse != null) {
+                Text(
+                    text = morse.symbol,
+                    style = MaterialTheme.typography.displayLarge,
+                    textAlign = TextAlign.Center
+                )
+            } else if (speech != null) {
+                Text(
+                    text = speech.text,
+                    style = MaterialTheme.typography.displayLarge,
+                    textAlign = TextAlign.Center
+                )
+            } else {
+                // Completely blank during silence
+                Text(
+                    text = "",
+                    style = MaterialTheme.typography.displayLarge,
+                    textAlign = TextAlign.Center
+                )
+            }
         }
     }
 }

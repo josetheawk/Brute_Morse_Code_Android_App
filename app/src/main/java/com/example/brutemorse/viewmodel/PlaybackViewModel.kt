@@ -6,7 +6,9 @@ import androidx.lifecycle.viewModelScope
 import com.example.brutemorse.data.SessionRepository
 import com.example.brutemorse.data.SettingsRepository
 import com.example.brutemorse.audio.MorseAudioPlayer
+import com.example.brutemorse.audio.TextToSpeechPlayer
 import com.example.brutemorse.model.MorseElement
+import com.example.brutemorse.model.SpeechElement
 import com.example.brutemorse.data.UserSettings
 import com.example.brutemorse.model.SessionStep
 import com.example.brutemorse.model.ScenarioScript
@@ -19,7 +21,8 @@ import kotlinx.coroutines.launch
 
 class PlaybackViewModel(
     private val sessionRepository: SessionRepository,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val context: android.content.Context
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(PlaybackUiState())
@@ -35,6 +38,7 @@ class PlaybackViewModel(
     private var playbackJob: Job? = null
     private var stepOffsets: List<Long> = emptyList()
     private val audioPlayer = MorseAudioPlayer()
+    private val ttsPlayer = TextToSpeechPlayer(context)
 
     init {
         viewModelScope.launch {
@@ -145,7 +149,7 @@ class PlaybackViewModel(
     private fun startPlayback() {
         playbackJob?.cancel()
         tickerJob?.cancel()
-        
+
         // Start UI ticker
         tickerJob = viewModelScope.launch {
             while (_uiState.value.isPlaying) {
@@ -162,36 +166,49 @@ class PlaybackViewModel(
                 if (finished) break
             }
         }
-        
+
         // Start audio playback
         playbackJob = viewModelScope.launch {
             var currentIndex = _uiState.value.currentIndex
-            
+
             while (currentIndex < session.size && _uiState.value.isPlaying) {
                 val step = session[currentIndex]
-                _uiState.value = _uiState.value.copy(
-                    currentIndex = currentIndex,
-                    currentStep = step
-                )
-                
-                // Play each element in the step
-                for (element in step.elements) {
+
+                // Play each element in the step sequentially
+                for (elementIndex in step.elements.indices) {
                     if (!_uiState.value.isPlaying) break
-                    
+
+                    val element = step.elements[elementIndex]
+
+                    // Update UI to show ONLY the current element
+                    _uiState.value = _uiState.value.copy(
+                        currentIndex = currentIndex,
+                        currentStep = step.copy(
+                            elements = listOf(element)  // Only current element!
+                        )
+                    )
+
                     when (element) {
                         is MorseElement -> {
-                            audioPlayer.playTone(element.toneFrequencyHz, element.durationMillis)
+                            audioPlayer.playMorsePattern(
+                                pattern = element.symbol,
+                                frequencyHz = element.toneFrequencyHz,
+                                wpm = element.wpm
+                            )
+                        }
+                        is SpeechElement -> {
+                            ttsPlayer.speak(element.text)
                         }
                         else -> {
-                            // For speech/silence/chime, just delay
                             delay(element.durationMillis)
                         }
                     }
                 }
-                
+
+                // Move to next step
                 currentIndex++
             }
-            
+
             // Finished
             if (_uiState.value.isPlaying) {
                 _uiState.value = _uiState.value.copy(isPlaying = false)
@@ -204,17 +221,19 @@ class PlaybackViewModel(
         tickerJob?.cancel()
         playbackJob?.cancel()
         audioPlayer.release()
+        ttsPlayer.release()
     }
 }
 
 class PlaybackViewModelFactory(
     private val sessionRepository: SessionRepository,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val context: android.content.Context
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(PlaybackViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return PlaybackViewModel(sessionRepository, settingsRepository) as T
+            return PlaybackViewModel(sessionRepository, settingsRepository, context) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }

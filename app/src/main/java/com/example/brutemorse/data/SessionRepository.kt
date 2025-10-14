@@ -45,7 +45,10 @@ class SessionRepository(private val settingsRepository: SettingsRepository) {
         var subPhase = 1
 
         // Phase 1.1 Nested Incremental
-        val nestedPasses = letters.indices.map { index -> letters.subList(0, index + 1) }
+        // Active Recall: repeat each letter 3 times
+        val nestedPasses = letters.indices.map { index ->
+            letters.subList(0, index + 1).flatMap { letter -> List(3) { letter } }
+        }
         nestedPasses.forEachIndexed { passIndex, pass ->
             sequence += createSessionStep(
                 settings = settings,
@@ -119,7 +122,9 @@ class SessionRepository(private val settingsRepository: SettingsRepository) {
         val numbers = MorseDefinitions.numbers
 
         // Phase 2.1 Nested numbers
-        val nestedNumbers = numbers.indices.map { index -> numbers.subList(0, index + 1) }
+        val nestedNumbers = numbers.indices.map { index ->
+            numbers.subList(0, index + 1).flatMap { number -> List(3) { number } }
+        }
         nestedNumbers.forEachIndexed { passIndex, pass ->
             sequence += createSessionStep(
                 settings = settings,

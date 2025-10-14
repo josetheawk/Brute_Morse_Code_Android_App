@@ -40,7 +40,7 @@ fun BruteMorseNavHost(
                         popUpTo(Screen.Setup.route) { inclusive = true }
                     }
                 },
-                settingsState = playbackViewModel.settingsState.value,
+                settingsState = playbackViewModel.settingsState.collectAsState().value,  // ✅ REACTIVE!
                 onSettingsChange = playbackViewModel::updateSettings,
                 onOpenSettings = { navController.navigate(Screen.Settings.route) },
                 onOpenScenarios = { navController.navigate(Screen.Scenarios.route) }
@@ -58,7 +58,7 @@ fun BruteMorseNavHost(
         }
         composable(Screen.Settings.route) {
             SettingsScreen(
-                settingsState = playbackViewModel.settingsState.value,
+                settingsState = playbackViewModel.settingsState.collectAsState().value,
                 onSettingsChange = playbackViewModel::updateSettings,
                 onNavigateUp = { navController.popBackStack() }
             )
