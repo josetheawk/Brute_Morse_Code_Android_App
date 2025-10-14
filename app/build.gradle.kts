@@ -56,7 +56,6 @@ android {
 
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.05.00")
-    val composeMaterialIconsVersion = "1.6.7" // Keep in sync with the Compose BOM above.
 
     implementation(composeBom)
     androidTestImplementation(composeBom)
@@ -67,6 +66,10 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
+    
+    // ADD THIS LINE - Extended Material Icons (includes AutoMirrored icons)
+    implementation("androidx.compose.material:material-icons-extended-android")
+
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.navigation:navigation-compose:2.7.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
