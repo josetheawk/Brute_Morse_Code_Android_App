@@ -189,7 +189,7 @@ The repository now contains a Jetpack Compose Android application that models th
 
 ## Developer Quickstart
 1. Open the project in Android Studio Hedgehog or newer.
-2. Let Gradle sync; if the wrapper JAR is missing, run `gradle wrapper` locally to regenerate it for your platform.
+2. Let Gradle sync; the wrapper scripts will fetch the Gradle JAR automatically (requires curl/wget on macOS/Linux or PowerShell on Windows).
 3. Select the `app` configuration and deploy to an emulator or device running Android 8.0 (API 26) or later.
 4. On first launch, enter your call sign, optional friends, confirm the default phase selection, and tap **START TRAINING** to generate a 7-hour passive session.
 5. Use the Listen screen’s controls to simulate playback, skip passes, and inspect future phases or scenario scripts.
