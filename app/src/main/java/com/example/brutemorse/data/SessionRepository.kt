@@ -59,11 +59,12 @@ class SessionRepository(private val settingsRepository: SettingsRepository) {
             )
         }
 
-        // Phase 1.2 BCT traversal
+        // Phase 1.2 BCT traversal with active recall
         subPhase++
         val bctSequence = bctTraversal(center = letters.size / 2, size = letters.size, direction = 1, coprime = 5)
         bctSequence.forEachIndexed { index, letterIndex ->
-            val letter = listOf(letters[letterIndex])
+            // Repeat each letter 3 times for active recall
+            val letter = List(3) { letters[letterIndex] }
             sequence += createSessionStep(
                 settings = settings,
                 descriptor = PhaseDescriptor(phaseIndex, subPhase, "BCT", "Balanced coprime traversal"),
@@ -321,14 +322,14 @@ class SessionRepository(private val settingsRepository: SettingsRepository) {
         elementIndex: Int = 0
     ): SessionStep {
         val playback = mutableListOf<com.example.brutemorse.model.PlaybackElement>()
-        val baseUnit = (1200f / settings.wpm).toLong()
+        val timing = settings.timing // Use centralized timing configuration
 
         tokens.forEachIndexed { index, token ->
             val morse = MorseDefinitions.morseMap[token] ?: token.toCharArray().joinToString(" ") { char ->
                 MorseDefinitions.morseMap[char.toString()].orEmpty()
             }
             val normalized = if (morse.isBlank()) "·" else morse
-            val duration = morseDurationMillis(normalized, baseUnit)
+            val duration = MorseTimingConfig.calculateDuration(normalized, timing)
             playback += MorseElement(
                 symbol = normalized,
                 character = token,
@@ -341,7 +342,7 @@ class SessionRepository(private val settingsRepository: SettingsRepository) {
             } else if (voiceMultiplier == 0) {
                 // no speech element
             }
-            playback += SilenceElement(durationMillis = baseUnit * 3)
+            playback += SilenceElement(durationMillis = timing.interCharacterGapMs)
         }
         playback += ChimeElement()
 
@@ -352,19 +353,6 @@ class SessionRepository(private val settingsRepository: SettingsRepository) {
             elementIndex = elementIndex,
             elements = playback
         )
-    }
-
-    private fun morseDurationMillis(pattern: String, unit: Long): Long {
-        var duration = 0L
-        pattern.forEach { char ->
-            duration += when (char) {
-                '.' -> unit
-                '-' -> unit * 3
-                else -> unit
-            }
-            duration += unit // intra-character gap
-        }
-        return duration + unit * 2
     }
 
     private fun bctTraversal(center: Int, size: Int, direction: Int, coprime: Int): List<Int> {

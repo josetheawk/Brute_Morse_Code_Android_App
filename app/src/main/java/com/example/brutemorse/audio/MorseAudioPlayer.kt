@@ -11,12 +11,17 @@ import kotlin.math.sin
 
 class MorseAudioPlayer(private val context: Context) {
 
+    // Reusable audio track for continuous tone
+    private var toneTrack: AudioTrack? = null
+    private var toneBuffer: ShortArray? = null
+    private val sampleRate = 44100
+    private var isPlaying = false
+
     suspend fun playMorsePattern(
         pattern: String,
         frequencyHz: Int,
         wpm: Int
     ) = withContext(Dispatchers.IO) {
-        // Force audio to phone speaker
         val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
         val previousMode = audioManager.mode
         val previousSpeakerphone = audioManager.isSpeakerphoneOn
@@ -25,61 +30,123 @@ class MorseAudioPlayer(private val context: Context) {
         audioManager.isSpeakerphoneOn = true
 
         try {
-            val unitMs = (1200f / wpm).toLong()
-            val sampleRate = 44100
-
-            // Calculate total duration and generate complete audio buffer
-            val totalDurationMs = calculatePatternDuration(pattern, unitMs)
+            // Use centralized timing
+            val timing = com.example.brutemorse.data.MorseTimingConfig(wpm)
+            val totalDurationMs = com.example.brutemorse.data.MorseTimingConfig.calculateDuration(pattern, timing)
             val totalSamples = (totalDurationMs * sampleRate / 1000).toInt()
             val samples = ShortArray(totalSamples)
-
-            // Generate the complete morse pattern with precise timing
             var currentSampleOffset = 0
 
             pattern.forEach { char ->
                 val elementDurationMs = when (char) {
-                    '.', '·', '•' -> unitMs        // Dit
-                    '-', '−', '–', '—' -> unitMs * 3   // Dah
-                    ' ' -> unitMs * 3               // Word space (just silence)
+                    '.', '·', '•' -> timing.ditMs
+                    '-', '−', '–', '—' -> timing.dahMs
+                    ' ' -> timing.interCharacterGapMs
                     else -> 0L
                 }
 
                 if (elementDurationMs > 0 && char != ' ') {
-                    // Generate tone for dit/dah
                     val elementSamples = (elementDurationMs * sampleRate / 1000).toInt()
                     generateTone(samples, currentSampleOffset, elementSamples, frequencyHz, sampleRate)
                     currentSampleOffset += elementSamples
                 } else if (char == ' ') {
-                    // Just advance for space (silence)
                     currentSampleOffset += (elementDurationMs * sampleRate / 1000).toInt()
                 }
-
-                // Add gap after element (1 unit of silence)
-                currentSampleOffset += (unitMs * sampleRate / 1000).toInt()
+                // Add intra-character gap
+                currentSampleOffset += (timing.intraCharacterGapMs * sampleRate / 1000).toInt()
             }
 
-            // Play the complete buffer
             playAudioBuffer(samples, sampleRate)
         } finally {
-            // Restore previous audio mode
             audioManager.mode = previousMode
             audioManager.isSpeakerphoneOn = previousSpeakerphone
         }
     }
 
-    private fun calculatePatternDuration(pattern: String, unitMs: Long): Long {
-        var duration = 0L
-        pattern.forEach { char ->
-            duration += when (char) {
-                '.', '·', '•' -> unitMs
-                '-', '−', '–', '—' -> unitMs * 3
-                ' ' -> unitMs * 3
-                else -> 0L
-            }
-            duration += unitMs // Gap after each element
+    fun startContinuousTone(frequencyHz: Int) {
+        // Initialize track and buffer if needed or if frequency changed
+        if (toneTrack == null) {
+            initializeToneTrack(frequencyHz)
         }
-        duration += unitMs * 2 // Final inter-character gap
-        return duration
+
+        isPlaying = true
+        try {
+            toneTrack?.play()
+        } catch (e: Exception) {
+            android.util.Log.e("MorseAudioPlayer", "Error starting tone", e)
+            releaseToneTrack()
+            initializeToneTrack(frequencyHz)
+            toneTrack?.play()
+        }
+    }
+
+    fun stopContinuousTone() {
+        isPlaying = false
+        try {
+            toneTrack?.pause()
+            toneTrack?.flush()
+        } catch (e: Exception) {
+            android.util.Log.e("MorseAudioPlayer", "Error stopping tone", e)
+        }
+    }
+
+    private fun initializeToneTrack(frequencyHz: Int) {
+        val minBufferSize = AudioTrack.getMinBufferSize(
+            sampleRate,
+            AudioFormat.CHANNEL_OUT_MONO,
+            AudioFormat.ENCODING_PCM_16BIT
+        )
+
+        // Generate 500ms of continuous tone for smoother looping
+        val bufferSamples = sampleRate / 2 // 500ms worth - longer for smoother sound
+        toneBuffer = ShortArray(bufferSamples)
+
+        // Generate perfect sine wave with no discontinuities
+        val cyclesPerBuffer = (frequencyHz.toDouble() * bufferSamples) / sampleRate
+        val samplesPerCycle = sampleRate.toDouble() / frequencyHz
+
+        for (i in 0 until bufferSamples) {
+            val phase = (2.0 * Math.PI * i) / samplesPerCycle
+            toneBuffer!![i] = (sin(phase) * Short.MAX_VALUE * 0.6).toInt().toShort()
+        }
+
+        try {
+            toneTrack = AudioTrack.Builder()
+                .setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                        .build()
+                )
+                .setAudioFormat(
+                    AudioFormat.Builder()
+                        .setSampleRate(sampleRate)
+                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                        .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                        .build()
+                )
+                .setBufferSizeInBytes(maxOf(minBufferSize * 4, bufferSamples * 2))
+                .setTransferMode(AudioTrack.MODE_STATIC)
+                .build()
+
+            // Write the buffer once - it will loop automatically in STATIC mode
+            toneTrack?.write(toneBuffer!!, 0, bufferSamples)
+            toneTrack?.setLoopPoints(0, bufferSamples, -1) // Loop forever
+        } catch (e: Exception) {
+            android.util.Log.e("MorseAudioPlayer", "Error initializing tone track", e)
+            releaseToneTrack()
+        }
+    }
+
+    private fun releaseToneTrack() {
+        try {
+            toneTrack?.stop()
+            toneTrack?.release()
+        } catch (e: Exception) {
+            android.util.Log.e("MorseAudioPlayer", "Error releasing tone track", e)
+        }
+        toneTrack = null
+        toneBuffer = null
     }
 
     private fun generateTone(
@@ -96,11 +163,9 @@ class MorseAudioPlayer(private val context: Context) {
             val angle = 2.0 * Math.PI * i / (sampleRate / frequencyHz.toDouble())
             var amplitude = 0.5
 
-            // Fade in
             if (i < fadeSamples) {
                 amplitude *= (i.toDouble() / fadeSamples)
             }
-            // Fade out
             if (i > numSamples - fadeSamples) {
                 amplitude *= ((numSamples - i).toDouble() / fadeSamples)
             }
@@ -138,7 +203,6 @@ class MorseAudioPlayer(private val context: Context) {
 
             track.play()
 
-            // Write buffer
             var offset = 0
             while (offset < samples.size) {
                 val written = track.write(samples, offset, samples.size - offset)
@@ -146,7 +210,6 @@ class MorseAudioPlayer(private val context: Context) {
                 offset += written
             }
 
-            // Wait for playback
             val durationMs = samples.size * 1000L / sampleRate
             kotlinx.coroutines.delay(durationMs)
 
@@ -159,6 +222,6 @@ class MorseAudioPlayer(private val context: Context) {
     }
 
     fun release() {
-        // Nothing to release
+        releaseToneTrack()
     }
 }

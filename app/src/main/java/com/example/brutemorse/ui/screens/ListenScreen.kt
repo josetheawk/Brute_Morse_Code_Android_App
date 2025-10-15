@@ -29,8 +29,14 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.Slider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -155,6 +161,9 @@ fun ListenScreen(
     onSkipNext: () -> Unit,
     onSkipPrevious: () -> Unit,
     onSkipPhase: () -> Unit,
+    onRestartSubPhase: () -> Unit = {},
+    onSeekToTime: (Long) -> Unit = {},
+    onRegenerateSession: () -> Unit = {},
     onOpenSettings: () -> Unit,
     onNavigateHome: () -> Unit = {},
     onPauseOnExit: () -> Unit = {},
@@ -195,7 +204,7 @@ fun ListenScreen(
         if (currentStep != null) {
             PhaseHeader(state)
             PlaybackVisualizer(currentStep.elements)
-            PlaybackDetails(state)
+            PlaybackDetails(state, onSeekToTime)
         } else {
             EmptyState()
         }
@@ -208,7 +217,9 @@ fun ListenScreen(
             onPlayPause = onPlayPause,
             onSkipNext = onSkipNext,
             onSkipPrevious = onSkipPrevious,
-            onSkipPhase = onSkipPhase
+            onSkipPhase = onSkipPhase,
+            onRestartSubPhase = onRestartSubPhase,
+            onRegenerateSession = onRegenerateSession
         )
 
         if (currentStep != null) {
@@ -307,7 +318,10 @@ private fun PlaybackVisualizer(elements: List<PlaybackElement>) {
 }
 
 @Composable
-private fun PlaybackDetails(state: PlaybackUiState) {
+private fun PlaybackDetails(state: PlaybackUiState, onSeekToTime: (Long) -> Unit) {
+    var isUserSeeking by remember { mutableStateOf(false) }
+    var seekValue by remember { mutableFloatStateOf(0f) }
+
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -316,10 +330,23 @@ private fun PlaybackDetails(state: PlaybackUiState) {
             text = "Elapsed ${formatDuration(state.elapsedMillis)} / ${formatDuration(state.totalMillis)}",
             style = MaterialTheme.typography.bodyLarge
         )
-        LinearProgressIndicator(
-            progress = {
+
+        // Interactive slider for seeking
+        Slider(
+            value = if (isUserSeeking) {
+                seekValue
+            } else {
                 if (state.totalMillis == 0L) 0f
                 else state.elapsedMillis / state.totalMillis.toFloat()
+            },
+            onValueChange = { value ->
+                isUserSeeking = true
+                seekValue = value
+            },
+            onValueChangeFinished = {
+                isUserSeeking = false
+                val targetMillis = (seekValue * state.totalMillis).toLong()
+                onSeekToTime(targetMillis)
             },
             modifier = Modifier.fillMaxWidth()
         )
@@ -332,43 +359,83 @@ private fun PlaybackControls(
     onPlayPause: () -> Unit,
     onSkipNext: () -> Unit,
     onSkipPrevious: () -> Unit,
-    onSkipPhase: () -> Unit
+    onSkipPhase: () -> Unit,
+    onRestartSubPhase: () -> Unit,
+    onRegenerateSession: () -> Unit
 ) {
-    Card(
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically
+        // Main playback controls
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
         ) {
-            IconButton(onClick = onSkipPrevious) {
-                Icon(
-                    imageVector = Icons.Filled.ArrowBack,
-                    contentDescription = "Previous"
-                )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onSkipPrevious) {
+                    Icon(
+                        imageVector = Icons.Filled.ArrowBack,
+                        contentDescription = "Previous"
+                    )
+                }
+                IconButton(onClick = onPlayPause) {
+                    Icon(
+                        imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                        contentDescription = if (isPlaying) "Pause" else "Play"
+                    )
+                }
+                IconButton(onClick = onSkipNext) {
+                    Icon(
+                        imageVector = Icons.Filled.ArrowForward,
+                        contentDescription = "Next"
+                    )
+                }
+                IconButton(onClick = onSkipPhase) {
+                    Icon(
+                        imageVector = Icons.Filled.KeyboardDoubleArrowRight,
+                        contentDescription = "Next phase"
+                    )
+                }
             }
-            IconButton(onClick = onPlayPause) {
-                Icon(
-                    imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                    contentDescription = if (isPlaying) "Pause" else "Play"
-                )
+        }
+
+        // Button row
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Resume button - only show when paused
+            if (!isPlaying) {
+                Button(
+                    onClick = onPlayPause,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Resume")
+                }
             }
-            IconButton(onClick = onSkipNext) {
-                Icon(
-                    imageVector = Icons.Filled.ArrowForward,
-                    contentDescription = "Next"
-                )
+
+            // Restart subphase button
+            Button(
+                onClick = onRestartSubPhase,
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("Restart Subphase")
             }
-            IconButton(onClick = onSkipPhase) {
-                Icon(
-                    imageVector = Icons.Filled.KeyboardDoubleArrowRight,
-                    contentDescription = "Next phase"
-                )
-            }
+        }
+
+        // Regenerate session button
+        OutlinedButton(
+            onClick = onRegenerateSession,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Regenerate Session (Apply WPM Changes)")
         }
     }
 }

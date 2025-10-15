@@ -5,16 +5,17 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.brutemorse.data.SessionRepository
 import com.example.brutemorse.data.SettingsRepository
-import com.example.brutemorse.audio.MorseAudioPlayer
 import com.example.brutemorse.audio.TextToSpeechPlayer
 import com.example.brutemorse.audio.MorseInputDetector
 import com.example.brutemorse.audio.MorseInputEvent
+import com.example.brutemorse.audio.MorseAudioPlayer
 import com.example.brutemorse.model.MorseElement
 import com.example.brutemorse.model.SpeechElement
 import com.example.brutemorse.data.UserSettings
 import com.example.brutemorse.model.SessionStep
 import com.example.brutemorse.model.ScenarioScript
 import com.example.brutemorse.model.MorseDefinitions
+import com.example.brutemorse.ui.screens.KeyerTestState
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -37,20 +38,31 @@ class PlaybackViewModel(
     private val _activeState = MutableStateFlow(ActiveUiState())
     val activeState: StateFlow<ActiveUiState> = _activeState.asStateFlow()
 
+    private val _keyerTestState = MutableStateFlow(KeyerTestState())
+    val keyerTestState: StateFlow<KeyerTestState> = _keyerTestState.asStateFlow()
+
     val scenarios: List<ScenarioScript> = sessionRepository.scenarios
 
     private var session: List<SessionStep> = emptyList()
     private var tickerJob: Job? = null
     private var playbackJob: Job? = null
+    private var morsePlaybackJob: Job? = null
     private var stepOffsets: List<Long> = emptyList()
     private val audioPlayer = MorseAudioPlayer(context)
     private val ttsPlayer = TextToSpeechPlayer(context)
+
+    // Add separate audio player for Active mode feedback
+    private val activeAudioPlayer = MorseAudioPlayer(context)
 
     private var inputDetector = MorseInputDetector(wpm = 25)
     private var activeSession: List<SessionStep> = emptyList()
     private var currentStepIndex = 0
     private var completionCheckJob: Job? = null
     private var audioInputEnabled = false
+
+    // Keyer test
+    private var testInputDetector: MorseInputDetector? = null
+    private var testMonitorJob: Job? = null
 
     // Store completed results history
     private data class CompletedSet(
@@ -68,6 +80,49 @@ class PlaybackViewModel(
                 _settingsState.value = settings
             }
         }
+
+        // Restore session on app restart
+        viewModelScope.launch {
+            val savedIndex = settingsRepository.getLastPlaybackIndex()
+            if (savedIndex >= 0) {
+                // Generate session and restore position
+                val settings = settingsState.value
+                session = sessionRepository.generateSession(settings)
+                val offsets = mutableListOf<Long>()
+                var running = 0L
+                session.forEach { step ->
+                    offsets += running
+                    running += step.elements.sumOf { it.durationMillis }
+                }
+                stepOffsets = offsets
+
+                if (session.isNotEmpty() && savedIndex < session.size) {
+                    val restoredElapsed = stepOffsets.getOrNull(savedIndex) ?: 0L
+                    _uiState.value = PlaybackUiState(
+                        isPlaying = false,
+                        currentStep = session.getOrNull(savedIndex),
+                        currentIndex = savedIndex,
+                        totalSteps = session.size,
+                        elapsedMillis = restoredElapsed,
+                        totalMillis = running
+                    )
+                }
+            }
+        }
+
+        // Restore active session on app restart
+        viewModelScope.launch {
+            val savedActiveIndex = settingsRepository.getLastActiveIndex()
+            if (savedActiveIndex >= 0) {
+                val settings = settingsState.value
+                activeSession = sessionRepository.generateSession(settings)
+
+                if (activeSession.isNotEmpty() && savedActiveIndex < activeSession.size) {
+                    currentStepIndex = savedActiveIndex
+                    loadActiveStep(savedActiveIndex, isResume = true)
+                }
+            }
+        }
     }
 
     fun generateSession() {
@@ -83,17 +138,18 @@ class PlaybackViewModel(
             stepOffsets = offsets
             if (session.isEmpty()) {
                 _uiState.value = PlaybackUiState(totalMillis = 0L, totalSteps = 0)
+                settingsRepository.saveLastPlaybackIndex(-1) // Clear saved position
                 return@launch
             }
             _uiState.value = PlaybackUiState(
-                isPlaying = true,
+                isPlaying = false,  // Start paused so user can press play/resume
                 currentStep = session.firstOrNull(),
                 currentIndex = 0,
                 totalSteps = session.size,
                 elapsedMillis = 0L,
                 totalMillis = running
             )
-            startPlayback()
+            settingsRepository.saveLastPlaybackIndex(0) // Save new starting position
         }
     }
 
@@ -119,7 +175,6 @@ class PlaybackViewModel(
     }
 
     fun pausePlayback() {
-        // Called when leaving Listen screen
         pause()
     }
 
@@ -152,6 +207,34 @@ class PlaybackViewModel(
             if (_uiState.value.isPlaying) {
                 startPlayback()
             }
+        }
+    }
+
+    fun restartSubPhase() {
+        if (session.isEmpty()) return
+        val currentStep = _uiState.value.currentStep ?: return
+        val subPhaseStartIndex = session.indexOfFirst { step ->
+            step.descriptor.phaseIndex == currentStep.descriptor.phaseIndex &&
+                    step.descriptor.subPhaseIndex == currentStep.descriptor.subPhaseIndex
+        }
+        if (subPhaseStartIndex != -1) {
+            updateIndex(subPhaseStartIndex)
+            if (_uiState.value.isPlaying) {
+                startPlayback()
+            }
+        }
+    }
+
+    fun seekToTime(targetMillis: Long) {
+        if (session.isEmpty() || stepOffsets.isEmpty()) return
+
+        // Find the step that contains this time
+        val targetIndex = stepOffsets.indexOfLast { offset -> offset <= targetMillis }
+            .coerceAtLeast(0)
+
+        updateIndex(targetIndex)
+        if (_uiState.value.isPlaying) {
+            startPlayback()
         }
     }
 
@@ -188,6 +271,29 @@ class PlaybackViewModel(
         viewModelScope.launch { sessionRepository.saveSettings(updated) }
     }
 
+    fun playMorsePattern(pattern: String) {
+        // Cancel any existing playback first
+        morsePlaybackJob?.cancel()
+
+        morsePlaybackJob = viewModelScope.launch {
+            try {
+                val settings = _settingsState.value
+                audioPlayer.playMorsePattern(
+                    pattern = pattern,
+                    frequencyHz = settings.toneFrequencyHz,
+                    wpm = settings.wpm
+                )
+            } catch (e: Exception) {
+                android.util.Log.e("PlaybackViewModel", "Error playing morse pattern", e)
+            }
+        }
+    }
+
+    fun stopMorsePlayback() {
+        morsePlaybackJob?.cancel()
+        morsePlaybackJob = null
+    }
+
     private fun updateIndex(index: Int) {
         if (session.isEmpty()) return
         playbackJob?.cancel()
@@ -198,13 +304,20 @@ class PlaybackViewModel(
             currentStep = session.getOrNull(index),
             elapsedMillis = newElapsed
         )
+        // Save position for app restart
+        viewModelScope.launch {
+            settingsRepository.saveLastPlaybackIndex(index)
+        }
     }
 
     private fun startPlayback() {
         playbackJob?.cancel()
         tickerJob?.cancel()
 
-        // Start UI ticker
+        // Reset elapsed time to match current step's start position
+        val currentStepOffset = stepOffsets.getOrNull(_uiState.value.currentIndex) ?: 0L
+        _uiState.value = _uiState.value.copy(elapsedMillis = currentStepOffset)
+
         tickerJob = viewModelScope.launch {
             while (_uiState.value.isPlaying) {
                 delay(100)
@@ -221,24 +334,21 @@ class PlaybackViewModel(
             }
         }
 
-        // Start audio playback
         playbackJob = viewModelScope.launch {
             var currentIndex = _uiState.value.currentIndex
 
             while (currentIndex < session.size && _uiState.value.isPlaying) {
                 val step = session[currentIndex]
 
-                // Play each element in the step sequentially
                 for (elementIndex in step.elements.indices) {
                     if (!_uiState.value.isPlaying) break
 
                     val element = step.elements[elementIndex]
 
-                    // Update UI to show ONLY the current element
                     _uiState.value = _uiState.value.copy(
                         currentIndex = currentIndex,
                         currentStep = step.copy(
-                            elements = listOf(element)  // Only current element!
+                            elements = listOf(element)
                         )
                     )
 
@@ -259,18 +369,18 @@ class PlaybackViewModel(
                     }
                 }
 
-                // Move to next step
                 currentIndex++
+                // Save position as we progress
+                if (currentIndex < session.size) {
+                    settingsRepository.saveLastPlaybackIndex(currentIndex)
+                }
             }
 
-            // Finished
             if (_uiState.value.isPlaying) {
                 _uiState.value = _uiState.value.copy(isPlaying = false)
             }
         }
     }
-
-    // Active Practice Methods
 
     fun generateActiveSession() {
         viewModelScope.launch {
@@ -281,31 +391,33 @@ class PlaybackViewModel(
 
             if (activeSession.isEmpty()) {
                 _activeState.value = ActiveUiState()
+                settingsRepository.saveLastActiveIndex(-1)
                 return@launch
             }
 
-            loadActiveStep(0)
+            loadActiveStep(0, isResume = false)
+            settingsRepository.saveLastActiveIndex(0)
         }
     }
 
     fun enableAudioInput() {
         try {
             audioInputEnabled = true
-            // Use audio detection for straight key
             inputDetector.startAudioListening()
         } catch (e: Exception) {
-            // Audio failed - that's okay, screen tap still works
             e.printStackTrace()
             audioInputEnabled = false
         }
     }
 
-    private fun loadActiveStep(index: Int) {
+    private fun loadActiveStep(index: Int, isResume: Boolean = false) {
         if (index >= activeSession.size) {
-            // Session complete
             _activeState.value = ActiveUiState()
             if (audioInputEnabled) {
                 inputDetector.stopAudioListening()
+            }
+            viewModelScope.launch {
+                settingsRepository.saveLastActiveIndex(-1)
             }
             return
         }
@@ -313,7 +425,6 @@ class PlaybackViewModel(
         val step = activeSession[index]
         currentStepIndex = index
 
-        // Extract tokens from step (only morse elements with distinct characters)
         val tokens = step.elements
             .filterIsInstance<MorseElement>()
             .map { it.character }
@@ -327,19 +438,57 @@ class PlaybackViewModel(
             isReviewMode = false,
             phaseDescriptor = step.descriptor,
             passIndex = step.passIndex,
-            totalPasses = step.passCount
+            totalPasses = step.passCount,
+            stepIndex = index,
+            totalSteps = activeSession.size
         )
 
-        // Start completion checker
-        startCompletionChecker()
+        if (!isResume) {
+            startCompletionChecker()
+        }
+
+        viewModelScope.launch {
+            settingsRepository.saveLastActiveIndex(index)
+        }
+    }
+
+    fun seekToActiveStep(targetStep: Int) {
+        if (activeSession.isEmpty()) return
+        val clampedStep = targetStep.coerceIn(0, activeSession.size - 1)
+        loadActiveStep(clampedStep, isResume = false)
+    }
+
+    fun restartActiveSubPhase() {
+        if (activeSession.isEmpty()) {
+            // If no active session exists, generate one
+            generateActiveSession()
+            return
+        }
+
+        val currentStep = activeSession.getOrNull(currentStepIndex) ?: return
+        val subPhaseStartIndex = activeSession.indexOfFirst { step ->
+            step.descriptor.phaseIndex == currentStep.descriptor.phaseIndex &&
+                    step.descriptor.subPhaseIndex == currentStep.descriptor.subPhaseIndex
+        }
+        if (subPhaseStartIndex != -1) {
+            loadActiveStep(subPhaseStartIndex, isResume = false)
+        }
     }
 
     fun onActiveKeyDown() {
         inputDetector.onKeyDown()
+
+        // Start playing continuous tone when key is pressed
+        val settings = _settingsState.value
+        activeAudioPlayer.startContinuousTone(settings.toneFrequencyHz)
     }
 
     fun onActiveKeyUp() {
         inputDetector.onKeyUp()
+
+        // Stop the tone immediately when key is released
+        activeAudioPlayer.stopContinuousTone()
+
         _activeState.value = _activeState.value.copy(
             currentInput = inputDetector.currentInput.value
         )
@@ -353,14 +502,11 @@ class PlaybackViewModel(
                 val state = _activeState.value
 
                 if (!state.isReviewMode) {
-                    // Determine timeout based on whether we're doing single letters or phrases
                     val isSingleLetterDrill = state.currentTokens.size <= 3 &&
                             state.currentTokens.all { it.length == 1 }
 
-                    // Shorter timeout for single letters, longer for phrases
                     val timeoutMs = if (isSingleLetterDrill) 800L else 2500L
 
-                    // Check if current character is complete
                     val event = inputDetector.checkCompletion(completionTimeoutMs = timeoutMs)
 
                     if (event != null) {
@@ -376,7 +522,6 @@ class PlaybackViewModel(
         val expectedChar = state.currentTokens.getOrNull(state.currentPosition) ?: return
         val expectedPattern = MorseDefinitions.morseMap[expectedChar] ?: ""
 
-        // Convert to display format (• and —)
         val expectedDisplay = expectedPattern.replace(".", "•").replace("-", "—")
 
         val attempt = CharacterAttempt(
@@ -390,11 +535,9 @@ class PlaybackViewModel(
         val newPosition = state.currentPosition + 1
 
         if (newPosition >= state.currentTokens.size) {
-            // All characters complete, show review
             val correct = newAttempts.count { it.isCorrect }
             val total = newAttempts.size
 
-            // Save to history
             val completed = CompletedSet(
                 stepIndex = currentStepIndex,
                 tokens = state.currentTokens,
@@ -413,7 +556,6 @@ class PlaybackViewModel(
 
             completionCheckJob?.cancel()
         } else {
-            // Move to next character
             _activeState.value = state.copy(
                 currentPosition = newPosition,
                 currentInput = "",
@@ -424,22 +566,19 @@ class PlaybackViewModel(
     }
 
     fun onActiveNextSet() {
-        loadActiveStep(currentStepIndex + 1)
+        loadActiveStep(currentStepIndex + 1, isResume = false)
     }
 
     fun onActiveBackToResults() {
-        // Go back to previous completed set's results
         if (completedSets.size >= 2) {
-            // Remove current set from history
             completedSets.removeLastOrNull()
 
-            // Get previous set
             val previousSet = completedSets.lastOrNull()
             if (previousSet != null) {
                 currentStepIndex = previousSet.stepIndex
                 _activeState.value = ActiveUiState(
                     currentTokens = previousSet.tokens,
-                    currentPosition = previousSet.tokens.size, // Already completed
+                    currentPosition = previousSet.tokens.size,
                     currentInput = "",
                     attempts = previousSet.attempts,
                     isReviewMode = true,
@@ -450,7 +589,6 @@ class PlaybackViewModel(
                 )
             }
         }
-        // If only 1 or 0 completed sets, do nothing (stay on current results)
     }
 
     fun jumpToPhaseActive(phaseNumber: Int) {
@@ -459,7 +597,7 @@ class PlaybackViewModel(
             step.descriptor.phaseIndex == phaseNumber
         }
         if (phaseStartIndex != -1) {
-            loadActiveStep(phaseStartIndex)
+            loadActiveStep(phaseStartIndex, isResume = false)
         }
     }
 
@@ -470,7 +608,61 @@ class PlaybackViewModel(
                     step.descriptor.subPhaseIndex == subPhaseNumber
         }
         if (subPhaseStartIndex != -1) {
-            loadActiveStep(subPhaseStartIndex)
+            loadActiveStep(subPhaseStartIndex, isResume = false)
+        }
+    }
+
+    fun startKeyerTest(sensitivity: Float) {
+        testInputDetector?.stopAudioListening()
+        testInputDetector = MorseInputDetector(wpm = 25).apply {
+            updateSensitivity(sensitivity)
+        }
+
+        _keyerTestState.value = KeyerTestState(isListening = true)
+
+        try {
+            testInputDetector?.startAudioListening()
+            startKeyerTestMonitoring()
+        } catch (e: Exception) {
+            android.util.Log.e("PlaybackViewModel", "Failed to start keyer test", e)
+            _keyerTestState.value = KeyerTestState(isListening = false)
+        }
+    }
+
+    fun stopKeyerTest() {
+        testMonitorJob?.cancel()
+        testInputDetector?.stopAudioListening()
+        testInputDetector = null
+        _keyerTestState.value = KeyerTestState(isListening = false)
+    }
+
+    private fun startKeyerTestMonitoring() {
+        testMonitorJob?.cancel()
+        testMonitorJob = viewModelScope.launch {
+            var detectionCount = 0
+            while (_keyerTestState.value.isListening) {
+                delay(50)
+
+                val detector = testInputDetector ?: break
+                val audioMetrics = detector.getAudioMetrics()
+
+                _keyerTestState.value = _keyerTestState.value.copy(
+                    currentRMS = audioMetrics.currentRMS,
+                    noiseFloor = audioMetrics.noiseFloor,
+                    threshold = audioMetrics.threshold,
+                    isKeyDown = audioMetrics.isKeyDown,
+                    currentInput = detector.currentInput.value
+                )
+
+                val event = detector.checkCompletion(completionTimeoutMs = 800L)
+                if (event != null) {
+                    detectionCount++
+                    _keyerTestState.value = _keyerTestState.value.copy(
+                        lastDetection = "${event.pattern} = ${event.character ?: "?"}",
+                        detectionCount = detectionCount
+                    )
+                }
+            }
         }
     }
 
@@ -478,12 +670,16 @@ class PlaybackViewModel(
         super.onCleared()
         tickerJob?.cancel()
         playbackJob?.cancel()
+        morsePlaybackJob?.cancel()
         completionCheckJob?.cancel()
+        testMonitorJob?.cancel()
         audioPlayer.release()
+        activeAudioPlayer.release()
         ttsPlayer.release()
         if (audioInputEnabled) {
             inputDetector.stopAudioListening()
         }
+        testInputDetector?.stopAudioListening()
     }
 }
 
