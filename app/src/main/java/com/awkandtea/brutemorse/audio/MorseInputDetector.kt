@@ -35,7 +35,7 @@ class MorseInputDetector(private val wpm: Int = 25) {
 
     // Use centralized timing configuration
     private val timing = com.awkandtea.brutemorse.data.MorseTimingConfig(wpm)
-    private val ditMax = (timing.ditMs * 1.5).toLong()  // 1.5 units = boundary between dit and dah
+    private val ditMax = (timing.ditMs * 2.0).toLong()  // 1.5 units = boundary between dit and dah
     private val interCharGap = timing.interCharacterGapMs
 
     // Audio detection
