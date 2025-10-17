@@ -1,4 +1,4 @@
-﻿package com.awkandtea.brutemorse.ui.screens
+package com.awkandtea.brutemorse.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -340,7 +340,7 @@ fun ChallengesScreen(
 
                     val match = userInput.trim() == currentChallenge
                     Text(
-                        text = if (match) "✓ Perfect!" else "✗ Not quite",
+                        text = if (match) "? Perfect!" else "? Not quite",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         color = if (match)

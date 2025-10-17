@@ -13,7 +13,7 @@ object MorseSymbols {
 
     // Display symbols (prettier for UI)
     const val DIT_DISPLAY = "\u2022"  // • bullet
-    const val DAH_DISPLAY = "\u2014"  // — em dash
+    const val DAH_DISPLAY = "\u2014"  // "” em dash
 
     // Legacy symbol variations (for backward compatibility during migration)
     // Using Unicode escapes to avoid encoding issues
@@ -25,9 +25,9 @@ object MorseSymbols {
 
     val DAH_VARIANTS = listOf(
         "-",           // standard hyphen-minus
-        "\u2212",      // − minus sign
-        "\u2013",      // – en dash
-        "\u2014"       // — em dash
+        "\u2212",      // âˆ’ minus sign
+        "\u2013",      // "“ en dash
+        "\u2014"       // "” em dash
     )
 
     // Gap representation
@@ -65,3 +65,4 @@ object MorseSymbols {
         return DIT_VARIANTS.contains(str) || DAH_VARIANTS.contains(str)
     }
 }
+

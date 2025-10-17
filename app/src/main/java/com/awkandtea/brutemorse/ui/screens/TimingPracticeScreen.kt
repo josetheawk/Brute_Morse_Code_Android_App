@@ -51,6 +51,14 @@ enum class PracticeMode {
     DIT, DAH, BOTH
 }
 
+private enum class FeedbackState {
+    None, Correct, Wrong
+}
+
+private enum class TargetType {
+    DIT, DAH
+}
+
 @Composable
 fun TimingPracticeScreen(
     onNavigateHome: () -> Unit,
@@ -160,7 +168,7 @@ fun TimingPracticeScreen(
                     androidx.compose.material3.ButtonDefaults.outlinedButtonColors()
                 }
             ) {
-                Text("Dit (•)")
+                Text("Dit (\u2022)")
             }
             OutlinedButton(
                 onClick = { currentMode = PracticeMode.DAH },
@@ -171,7 +179,7 @@ fun TimingPracticeScreen(
                     androidx.compose.material3.ButtonDefaults.outlinedButtonColors()
                 }
             ) {
-                Text("Dah (—)")
+                Text("Dah (\u2014)")
             }
             OutlinedButton(
                 onClick = { currentMode = PracticeMode.BOTH },
@@ -193,7 +201,7 @@ fun TimingPracticeScreen(
         ) {
             Column(modifier = Modifier.padding(12.dp)) {
                 Text(
-                    text = "Next: ${if (currentTarget == TargetType.DIT) "DIT (•)" else "DAH (—)"}",
+                    text = "Next: ${if (currentTarget == TargetType.DIT) "DIT (\u2022)" else "DAH (\u2014)"}",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
@@ -381,12 +389,4 @@ private fun ScoreCard(label: String, value: String) {
             )
         }
     }
-}
-
-private enum class FeedbackState {
-    None, Correct, Wrong
-}
-
-private enum class TargetType {
-    DIT, DAH
 }

@@ -1,8 +1,8 @@
-﻿/*
+/*
  * ============================================================================
  * FILE: SessionRepository.kt
  * LOCATION: app/src/main/java/com/example/brutemorse/data/SessionRepository.kt
- * STATUS: ✅ FIXED - All timing type annotations added
+ * STATUS: ? FIXED - All timing type annotations added
  *
  * CHANGES MADE:
  * - Line ~437: Added explicit MorseTimingConfig type in createNestedIDStep()
@@ -344,7 +344,7 @@ class SessionRepository(private val settingsRepository: SettingsRepository) {
         return sequence
     }
 
-    // ✅ FIX 1: Explicit type annotation added
+    // ? FIX 1: Explicit type annotation added
     private fun createNestedIDStep(
         settings: UserSettings,
         repetitionCount: Int,
@@ -356,7 +356,7 @@ class SessionRepository(private val settingsRepository: SettingsRepository) {
     ): SessionStep {
         val playback = mutableListOf<com.awkandtea.brutemorse.model.PlaybackElement>()
 
-        // ✅ FIX: Explicit type annotation
+        // ? FIX: Explicit type annotation
         val timing: com.awkandtea.brutemorse.data.MorseTimingConfig = settings.timing
 
         uniqueTokens.forEach { token ->
@@ -395,7 +395,7 @@ class SessionRepository(private val settingsRepository: SettingsRepository) {
         )
     }
 
-    // ✅ FIX 2: Explicit type annotation added
+    // ? FIX 2: Explicit type annotation added
     private fun createSessionStepWithRepetition(
         settings: UserSettings,
         descriptor: PhaseDescriptor,
@@ -406,7 +406,7 @@ class SessionRepository(private val settingsRepository: SettingsRepository) {
     ): SessionStep {
         val playback = mutableListOf<com.awkandtea.brutemorse.model.PlaybackElement>()
 
-        // ✅ FIX: Explicit type annotation
+        // ? FIX: Explicit type annotation
         val timing: com.awkandtea.brutemorse.data.MorseTimingConfig = settings.timing
 
         tokens.forEachIndexed { index, token ->
@@ -443,7 +443,7 @@ class SessionRepository(private val settingsRepository: SettingsRepository) {
         )
     }
 
-    // ✅ FIX 3: Explicit type annotation added
+    // ? FIX 3: Explicit type annotation added
     private fun createSessionStep(
         settings: UserSettings,
         descriptor: PhaseDescriptor,
@@ -455,7 +455,7 @@ class SessionRepository(private val settingsRepository: SettingsRepository) {
     ): SessionStep {
         val playback = mutableListOf<com.awkandtea.brutemorse.model.PlaybackElement>()
 
-        // ✅ FIX: Explicit type annotation
+        // ? FIX: Explicit type annotation
         val timing: com.awkandtea.brutemorse.data.MorseTimingConfig = settings.timing
 
         tokens.forEachIndexed { index, token ->

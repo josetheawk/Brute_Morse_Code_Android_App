@@ -162,7 +162,7 @@ fun SettingsScreen(
             onClick = onOpenRepetitionSettings,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Configure Repetition Settings →")
+            Text("Configure Repetition Settings")
         }
 
         Text(
@@ -187,7 +187,7 @@ fun SettingsScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
-                    "⚠️ Important: Straight Key Compatibility",
+                    "WARNING: Straight Key Compatibility",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onErrorContainer

@@ -152,15 +152,15 @@ fun RepetitionSettingsScreen(
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    "• First 3 reps: Morse + Vocal (M-V)",
+                    "* First 3 reps: Morse + Vocal (M-V)",
                     style = MaterialTheme.typography.bodySmall
                 )
                 Text(
-                    "• Reps 4+: Morse only (M)",
+                    "* Reps 4+: Morse only (M)",
                     style = MaterialTheme.typography.bodySmall
                 )
                 Text(
-                    "• Every 5th after position 3: Morse + Vocal (M-V)",
+                    "* Every 5th after position 3: Morse + Vocal (M-V)",
                     style = MaterialTheme.typography.bodySmall
                 )
                 Text(

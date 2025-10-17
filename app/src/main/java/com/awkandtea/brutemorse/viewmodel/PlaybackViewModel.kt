@@ -1,4 +1,4 @@
-﻿package com.awkandtea.brutemorse.viewmodel
+package com.awkandtea.brutemorse.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider

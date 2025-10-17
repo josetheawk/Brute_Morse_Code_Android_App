@@ -1,4 +1,4 @@
-﻿package com.awkandtea.brutemorse.audio
+package com.awkandtea.brutemorse.audio
 
 import android.media.AudioFormat
 import android.media.AudioRecord
@@ -237,3 +237,4 @@ class MorseInputDetector(private val wpm: Int = 25) {
         return null
     }
 }
+

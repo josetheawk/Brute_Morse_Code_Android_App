@@ -1,4 +1,4 @@
-﻿package com.awkandtea.brutemorse.ui.screens
+package com.awkandtea.brutemorse.ui.screens
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement

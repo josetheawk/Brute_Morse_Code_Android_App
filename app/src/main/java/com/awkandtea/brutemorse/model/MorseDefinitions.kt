@@ -1,4 +1,4 @@
-﻿package com.awkandtea.brutemorse.model
+package com.awkandtea.brutemorse.model
 import com.awkandtea.brutemorse.model.MorseSymbols
 
 object MorseDefinitions {
@@ -51,3 +51,4 @@ object MorseDefinitions {
         "ANT", "RIG", "WX", "PWR", "HF", "VHF", "UHF", "CW", "SSB"
     )
 }
+

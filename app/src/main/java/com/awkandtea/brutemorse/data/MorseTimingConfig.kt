@@ -38,16 +38,13 @@ data class MorseTimingConfig(
             var duration = 0L
 
             pattern.forEach { char ->
-                duration += when (char) {
-                    '.', '·', '•' -> config.ditMs
-                    '-', '−', '–', '—' -> config.dahMs
+                val elementDurationMs = when (char) {
+                    '.', '\u00B7', '\u2022' -> config.ditMs
+                    '-', '\u2212', '\u2013', '\u2014' -> config.dahMs
                     ' ' -> config.interCharacterGapMs
                     else -> 0L
                 }
-                // Add intra-character gap after each element (except spaces)
-                if (char != ' ') {
-                    duration += config.intraCharacterGapMs
-                }
+                // rest of the code...
             }
 
             // Add final inter-character gap
@@ -56,3 +53,4 @@ data class MorseTimingConfig(
         }
     }
 }
+

@@ -341,11 +341,11 @@ fun KeyerTestScreen(
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold
                 )
-                Text("• Make sure your straight key is plugged into the microphone jack")
-                Text("• Or use a USB-C audio adapter if needed")
-                Text("• The RMS should jump when you press the key")
-                Text("• If RMS stays near noise floor, increase sensitivity")
-                Text("• Wait a few seconds for noise floor to stabilize")
+                Text("* Make sure your straight key is plugged into the microphone jack")
+                Text("* Or use a USB-C audio adapter if needed")
+                Text("* The RMS should jump when you press the key")
+                Text("* If RMS stays near noise floor, increase sensitivity")
+                Text("* Wait a few seconds for noise floor to stabilize")
             }
         }
     }
