@@ -6,11 +6,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.brutemorse"
+    namespace = "com.awkandtea.brutemorse"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.example.brutemorse"
+        applicationId = "com.awkandtea.brutemorse"
         minSdk = 24
         targetSdk = 34
         versionCode = 1
