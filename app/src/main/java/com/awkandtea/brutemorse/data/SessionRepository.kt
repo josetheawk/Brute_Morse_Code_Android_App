@@ -1,4 +1,4 @@
-/*
+﻿/*
  * ============================================================================
  * FILE: SessionRepository.kt
  * LOCATION: app/src/main/java/com/example/brutemorse/data/SessionRepository.kt
@@ -24,6 +24,7 @@ import com.awkandtea.brutemorse.model.SilenceElement
 import com.awkandtea.brutemorse.model.SpeechElement
 import com.awkandtea.brutemorse.model.UserSettings
 import kotlinx.coroutines.flow.first
+import com.awkandtea.brutemorse.model.MorseSymbols
 import kotlin.math.ceil
 
 class SessionRepository(private val settingsRepository: SettingsRepository) {
@@ -363,7 +364,7 @@ class SessionRepository(private val settingsRepository: SettingsRepository) {
                 val morse = MorseDefinitions.morseMap[token] ?: token.toCharArray().joinToString(" ") { char ->
                     MorseDefinitions.morseMap[char.toString()].orEmpty()
                 }
-                val normalized = if (morse.isBlank()) "·" else morse
+                val normalized = if (morse.isBlank()) MorseSymbols.DIT_DISPLAY else morse
                 val duration = MorseTimingConfig.calculateDuration(normalized, timing)
 
                 playback += MorseElement(
@@ -412,7 +413,7 @@ class SessionRepository(private val settingsRepository: SettingsRepository) {
             val morse = MorseDefinitions.morseMap[token] ?: token.toCharArray().joinToString(" ") { char ->
                 MorseDefinitions.morseMap[char.toString()].orEmpty()
             }
-            val normalized = if (morse.isBlank()) "·" else morse
+            val normalized = if (morse.isBlank()) MorseSymbols.DIT_DISPLAY else morse
             val duration = MorseTimingConfig.calculateDuration(normalized, timing)
 
             playback += MorseElement(
@@ -461,7 +462,7 @@ class SessionRepository(private val settingsRepository: SettingsRepository) {
             val morse = MorseDefinitions.morseMap[token] ?: token.toCharArray().joinToString(" ") { char ->
                 MorseDefinitions.morseMap[char.toString()].orEmpty()
             }
-            val normalized = if (morse.isBlank()) "·" else morse
+            val normalized = if (morse.isBlank()) MorseSymbols.DIT_DISPLAY else morse
             val duration = MorseTimingConfig.calculateDuration(normalized, timing)
 
             playback += MorseElement(

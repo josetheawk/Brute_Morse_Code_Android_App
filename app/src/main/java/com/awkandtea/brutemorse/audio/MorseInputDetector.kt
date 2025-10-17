@@ -1,4 +1,4 @@
-package com.awkandtea.brutemorse.audio
+﻿package com.awkandtea.brutemorse.audio
 
 import android.media.AudioFormat
 import android.media.AudioRecord
@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlin.math.max
+import com.awkandtea.brutemorse.model.MorseSymbols
 import kotlin.math.sqrt
 
 data class MorseInputEvent(
@@ -168,7 +169,7 @@ class MorseInputDetector(private val wpm: Int = 25) {
             timings.add(duration)
 
             // Determine if dit or dah - using nice symbols
-            val symbol = if (duration < ditMax) "•" else "—"
+            val symbol = if (duration < ditMax) MorseSymbols.DIT_DISPLAY else MorseSymbols.DAH_DISPLAY
             _currentInput.value += symbol
 
             android.util.Log.d("MorseInputDetector",
@@ -188,8 +189,8 @@ class MorseInputDetector(private val wpm: Int = 25) {
             if (pattern.isNotEmpty()) {
                 // Convert display symbols back to standard morse for lookup
                 val standardPattern = pattern
-                    .replace("•", ".")
-                    .replace("—", "-")
+                    .replace(MorseSymbols.DIT_DISPLAY, ".")
+                    .replace(MorseSymbols.DAH_DISPLAY, "-")
 
                 val decoded = MorseDefinitions.morseMap.entries
                     .firstOrNull { it.value == standardPattern }?.key
@@ -219,8 +220,8 @@ class MorseInputDetector(private val wpm: Int = 25) {
         val pattern = _currentInput.value
         if (pattern.isNotEmpty()) {
             val standardPattern = pattern
-                .replace("•", ".")
-                .replace("—", "-")
+                .replace(MorseSymbols.DIT_DISPLAY, ".")
+                .replace(MorseSymbols.DAH_DISPLAY, "-")
 
             val decoded = MorseDefinitions.morseMap.entries
                 .firstOrNull { it.value == standardPattern }?.key

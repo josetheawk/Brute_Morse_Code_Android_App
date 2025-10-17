@@ -1,4 +1,4 @@
-package com.awkandtea.brutemorse.viewmodel
+﻿package com.awkandtea.brutemorse.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -21,6 +21,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import com.awkandtea.brutemorse.model.MorseSymbols
 import kotlinx.coroutines.launch
 
 class PlaybackViewModel(
@@ -522,7 +523,7 @@ class PlaybackViewModel(
         val expectedChar = state.currentTokens.getOrNull(state.currentPosition) ?: return
         val expectedPattern = MorseDefinitions.morseMap[expectedChar] ?: ""
 
-        val expectedDisplay = expectedPattern.replace(".", "•").replace("-", "—")
+        val expectedDisplay = expectedPattern.replace(".", MorseSymbols.DIT_DISPLAY).replace("-", MorseSymbols.DAH_DISPLAY)
 
         val attempt = CharacterAttempt(
             expectedChar = expectedChar,

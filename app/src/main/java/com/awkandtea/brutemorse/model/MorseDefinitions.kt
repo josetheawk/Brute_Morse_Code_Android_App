@@ -1,4 +1,5 @@
-package com.awkandtea.brutemorse.model
+﻿package com.awkandtea.brutemorse.model
+import com.awkandtea.brutemorse.model.MorseSymbols
 
 object MorseDefinitions {
     val alphabet = ('A'..'Z').map { it.toString() }

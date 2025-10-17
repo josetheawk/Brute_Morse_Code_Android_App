@@ -40,6 +40,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.awkandtea.brutemorse.model.UserSettings
 import com.awkandtea.brutemorse.model.MorseDefinitions
+import com.awkandtea.brutemorse.model.MorseSymbols
 import kotlinx.coroutines.delay
 
 @Composable
@@ -59,12 +60,12 @@ fun FreePracticeScreen(
     val scrollState = rememberScrollState()
 
     val ditUnit = (1200f / settingsState.wpm).toLong()
-    val letterGap = ditUnit * 3  // 3 units between letters
-    val wordGap = ditUnit * 7    // 7 units between words
+    val letterGap = ditUnit * 5  // 3 units between letters
+    val wordGap = ditUnit * 10    // 7 units between words
 
     // Helper to decode morse to character
     fun decodeMorse(pattern: String): String {
-        val standardPattern = pattern.replace("•", ".").replace("—", "-")
+        val standardPattern = pattern.replace(MorseSymbols.DIT_DISPLAY, ".").replace(MorseSymbols.DAH_DISPLAY, "-")
         return MorseDefinitions.morseMap.entries
             .firstOrNull { it.value == standardPattern }?.key ?: "?"
     }
@@ -230,8 +231,8 @@ fun FreePracticeScreen(
                             onKeyUp()
 
                             // Determine dit or dah based on duration
-                            val ditMax = ditUnit * 2.0
-                            val symbol = if (duration < ditMax) "•" else "—"
+                            val ditMax = ditUnit * 2.5
+                            val symbol = if (duration < ditMax) MorseSymbols.DIT_DISPLAY else MorseSymbols.DAH_DISPLAY
                             currentLetter += symbol
                             lastTapTime = System.currentTimeMillis()
                         }
@@ -260,8 +261,8 @@ fun FreePracticeScreen(
                     val fullText = typedText + currentLetter
                     if (fullText.isNotEmpty()) {
                         val morsePattern = fullText
-                            .replace("•", ".")
-                            .replace("—", "-")
+                            .replace(MorseSymbols.DIT_DISPLAY, ".")
+                            .replace(MorseSymbols.DAH_DISPLAY, "-")
                         onPlayback(morsePattern)
                     }
                 },

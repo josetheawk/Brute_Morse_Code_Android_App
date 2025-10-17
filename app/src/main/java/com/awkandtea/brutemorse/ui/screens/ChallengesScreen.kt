@@ -1,4 +1,4 @@
-package com.awkandtea.brutemorse.ui.screens
+﻿package com.awkandtea.brutemorse.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -40,6 +40,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.awkandtea.brutemorse.model.UserSettings
 import com.awkandtea.brutemorse.model.MorseDefinitions
+import com.awkandtea.brutemorse.model.MorseSymbols
 import kotlinx.coroutines.delay
 
 @Composable
@@ -78,7 +79,7 @@ fun ChallengesScreen(
 
     // Helper to decode morse to character
     fun decodeMorse(pattern: String): String {
-        val standardPattern = pattern.replace("•", ".").replace("—", "-")
+        val standardPattern = pattern.replace(MorseSymbols.DIT_DISPLAY, ".").replace(MorseSymbols.DAH_DISPLAY, "-")
         return MorseDefinitions.morseMap.entries
             .firstOrNull { it.value == standardPattern }?.key ?: "?"
     }
@@ -263,7 +264,7 @@ fun ChallengesScreen(
                                 onKeyUp()
 
                                 val ditMax = ditUnit * 2.0
-                                val symbol = if (duration < ditMax) "•" else "—"
+                                val symbol = if (duration < ditMax) MorseSymbols.DIT_DISPLAY else MorseSymbols.DAH_DISPLAY
                                 currentLetter += symbol
                                 lastTapTime = System.currentTimeMillis()
                             }
@@ -359,8 +360,8 @@ fun ChallengesScreen(
                     onClick = {
                         // Play user's attempt - convert display symbols to morse
                         val morsePattern = userInput
-                            .replace("•", ".")
-                            .replace("—", "-")
+                            .replace(MorseSymbols.DIT_DISPLAY, ".")
+                            .replace(MorseSymbols.DAH_DISPLAY, "-")
                         onPlayback(morsePattern)
                     },
                     modifier = Modifier.weight(1f)

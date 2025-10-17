@@ -1,4 +1,4 @@
-package com.awkandtea.brutemorse.ui.screens
+﻿package com.awkandtea.brutemorse.ui.screens
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import com.awkandtea.brutemorse.model.MorseElement
 import com.awkandtea.brutemorse.model.PlaybackElement
 import com.awkandtea.brutemorse.model.SpeechElement
+import com.awkandtea.brutemorse.model.MorseSymbols
 import com.awkandtea.brutemorse.viewmodel.PlaybackUiState
 
 @Composable
@@ -291,9 +292,9 @@ private fun PlaybackVisualizer(elements: List<PlaybackElement>) {
             if (morse != null) {
                 // Convert old symbols to nice ones
                 val displaySymbol = morse.symbol
-                    .replace(".", "•")
-                    .replace("-", "—")
-                    .replace("·", "•")  // In case old symbol is there
+                    .replace(".", MorseSymbols.DIT_DISPLAY)
+                    .replace("-", MorseSymbols.DAH_DISPLAY)
+                    .replace(MorseSymbols.DIT_DISPLAY, MorseSymbols.DIT_DISPLAY)  // In case old symbol is there
 
                 Text(
                     text = displaySymbol,

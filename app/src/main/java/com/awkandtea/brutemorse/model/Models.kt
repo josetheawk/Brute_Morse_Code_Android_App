@@ -1,5 +1,6 @@
-package com.awkandtea.brutemorse.model
+﻿package com.awkandtea.brutemorse.model
 
+import com.awkandtea.brutemorse.model.MorseSymbols
 import kotlinx.serialization.Serializable
 
 enum class SegmentType {
