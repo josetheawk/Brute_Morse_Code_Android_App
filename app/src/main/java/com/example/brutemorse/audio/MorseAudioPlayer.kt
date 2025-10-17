@@ -11,7 +11,6 @@ import kotlin.math.sin
 
 class MorseAudioPlayer(private val context: Context) {
 
-    // Reusable audio track for continuous tone
     private var toneTrack: AudioTrack? = null
     private var toneBuffer: ShortArray? = null
     private val sampleRate = 44100
@@ -30,10 +29,15 @@ class MorseAudioPlayer(private val context: Context) {
         audioManager.isSpeakerphoneOn = true
 
         try {
-            // Use centralized timing
             val timing = com.example.brutemorse.data.MorseTimingConfig(wpm)
             val totalDurationMs = com.example.brutemorse.data.MorseTimingConfig.calculateDuration(pattern, timing)
             val totalSamples = (totalDurationMs * sampleRate / 1000).toInt()
+
+            if (totalSamples <= 0) {
+                android.util.Log.w("MorseAudioPlayer", "Invalid pattern duration: $totalDurationMs ms")
+                return@withContext
+            }
+
             val samples = ShortArray(totalSamples)
             var currentSampleOffset = 0
 
@@ -47,16 +51,38 @@ class MorseAudioPlayer(private val context: Context) {
 
                 if (elementDurationMs > 0 && char != ' ') {
                     val elementSamples = (elementDurationMs * sampleRate / 1000).toInt()
+
+                    if (currentSampleOffset + elementSamples > samples.size) {
+                        android.util.Log.w("MorseAudioPlayer", "Pattern too long at offset $currentSampleOffset, truncating")
+                        return@forEach
+                    }
+
                     generateTone(samples, currentSampleOffset, elementSamples, frequencyHz, sampleRate)
                     currentSampleOffset += elementSamples
                 } else if (char == ' ') {
-                    currentSampleOffset += (elementDurationMs * sampleRate / 1000).toInt()
+                    val gapSamples = (elementDurationMs * sampleRate / 1000).toInt()
+                    currentSampleOffset += gapSamples
+
+                    if (currentSampleOffset > samples.size) {
+                        android.util.Log.w("MorseAudioPlayer", "Pattern overflow during gap, truncating")
+                        currentSampleOffset = samples.size
+                        return@forEach
+                    }
                 }
-                // Add intra-character gap
-                currentSampleOffset += (timing.intraCharacterGapMs * sampleRate / 1000).toInt()
+
+                val gapSamples = (timing.intraCharacterGapMs * sampleRate / 1000).toInt()
+                currentSampleOffset += gapSamples
+
+                if (currentSampleOffset > samples.size) {
+                    android.util.Log.w("MorseAudioPlayer", "Pattern overflow during intra-char gap")
+                    currentSampleOffset = samples.size
+                    return@forEach
+                }
             }
 
             playAudioBuffer(samples, sampleRate)
+        } catch (e: Exception) {
+            android.util.Log.e("MorseAudioPlayer", "Error playing morse pattern", e)
         } finally {
             audioManager.mode = previousMode
             audioManager.isSpeakerphoneOn = previousSpeakerphone
@@ -64,7 +90,6 @@ class MorseAudioPlayer(private val context: Context) {
     }
 
     fun startContinuousTone(frequencyHz: Int) {
-        // Initialize track and buffer if needed or if frequency changed
         if (toneTrack == null) {
             initializeToneTrack(frequencyHz)
         }
@@ -91,26 +116,23 @@ class MorseAudioPlayer(private val context: Context) {
     }
 
     private fun initializeToneTrack(frequencyHz: Int) {
-        val minBufferSize = AudioTrack.getMinBufferSize(
-            sampleRate,
-            AudioFormat.CHANNEL_OUT_MONO,
-            AudioFormat.ENCODING_PCM_16BIT
-        )
-
-        // Generate 500ms of continuous tone for smoother looping
-        val bufferSamples = sampleRate / 2 // 500ms worth - longer for smoother sound
-        toneBuffer = ShortArray(bufferSamples)
-
-        // Generate perfect sine wave with no discontinuities
-        val cyclesPerBuffer = (frequencyHz.toDouble() * bufferSamples) / sampleRate
-        val samplesPerCycle = sampleRate.toDouble() / frequencyHz
-
-        for (i in 0 until bufferSamples) {
-            val phase = (2.0 * Math.PI * i) / samplesPerCycle
-            toneBuffer!![i] = (sin(phase) * Short.MAX_VALUE * 0.6).toInt().toShort()
-        }
-
         try {
+            val minBufferSize = AudioTrack.getMinBufferSize(
+                sampleRate,
+                AudioFormat.CHANNEL_OUT_MONO,
+                AudioFormat.ENCODING_PCM_16BIT
+            )
+
+            val bufferSamples = sampleRate / 2
+            toneBuffer = ShortArray(bufferSamples)
+
+            val samplesPerCycle = sampleRate.toDouble() / frequencyHz
+
+            for (i in 0 until bufferSamples) {
+                val phase = (2.0 * Math.PI * i) / samplesPerCycle
+                toneBuffer!![i] = (sin(phase) * Short.MAX_VALUE * 0.6).toInt().toShort()
+            }
+
             toneTrack = AudioTrack.Builder()
                 .setAudioAttributes(
                     AudioAttributes.Builder()
@@ -129,9 +151,8 @@ class MorseAudioPlayer(private val context: Context) {
                 .setTransferMode(AudioTrack.MODE_STATIC)
                 .build()
 
-            // Write the buffer once - it will loop automatically in STATIC mode
             toneTrack?.write(toneBuffer!!, 0, bufferSamples)
-            toneTrack?.setLoopPoints(0, bufferSamples, -1) // Loop forever
+            toneTrack?.setLoopPoints(0, bufferSamples, -1)
         } catch (e: Exception) {
             android.util.Log.e("MorseAudioPlayer", "Error initializing tone track", e)
             releaseToneTrack()
@@ -156,18 +177,25 @@ class MorseAudioPlayer(private val context: Context) {
         frequencyHz: Int,
         sampleRate: Int
     ) {
+        if (startOffset < 0 || startOffset >= buffer.size) {
+            android.util.Log.e("MorseAudioPlayer", "Invalid startOffset: $startOffset")
+            return
+        }
+
         val fadeMs = 3
         val fadeSamples = (fadeMs * sampleRate / 1000).coerceAtMost(numSamples / 2)
 
-        for (i in 0 until numSamples.coerceAtMost(buffer.size - startOffset)) {
+        val maxSamples = (buffer.size - startOffset).coerceAtMost(numSamples)
+
+        for (i in 0 until maxSamples) {
             val angle = 2.0 * Math.PI * i / (sampleRate / frequencyHz.toDouble())
             var amplitude = 0.5
 
             if (i < fadeSamples) {
                 amplitude *= (i.toDouble() / fadeSamples)
             }
-            if (i > numSamples - fadeSamples) {
-                amplitude *= ((numSamples - i).toDouble() / fadeSamples)
+            if (i > maxSamples - fadeSamples) {
+                amplitude *= ((maxSamples - i).toDouble() / fadeSamples)
             }
 
             buffer[startOffset + i] = (sin(angle) * Short.MAX_VALUE * amplitude).toInt().toShort()
@@ -206,7 +234,10 @@ class MorseAudioPlayer(private val context: Context) {
             var offset = 0
             while (offset < samples.size) {
                 val written = track.write(samples, offset, samples.size - offset)
-                if (written < 0) break
+                if (written < 0) {
+                    android.util.Log.e("MorseAudioPlayer", "Error writing audio: $written")
+                    break
+                }
                 offset += written
             }
 
@@ -215,9 +246,13 @@ class MorseAudioPlayer(private val context: Context) {
 
             track.stop()
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.e("MorseAudioPlayer", "Error playing audio buffer", e)
         } finally {
-            track?.release()
+            try {
+                track?.release()
+            } catch (e: Exception) {
+                android.util.Log.e("MorseAudioPlayer", "Error releasing track", e)
+            }
         }
     }
 

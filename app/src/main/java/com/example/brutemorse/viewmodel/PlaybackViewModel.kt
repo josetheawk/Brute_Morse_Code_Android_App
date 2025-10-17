@@ -11,7 +11,7 @@ import com.example.brutemorse.audio.MorseInputEvent
 import com.example.brutemorse.audio.MorseAudioPlayer
 import com.example.brutemorse.model.MorseElement
 import com.example.brutemorse.model.SpeechElement
-import com.example.brutemorse.data.UserSettings
+import com.example.brutemorse.model.UserSettings
 import com.example.brutemorse.model.SessionStep
 import com.example.brutemorse.model.ScenarioScript
 import com.example.brutemorse.model.MorseDefinitions

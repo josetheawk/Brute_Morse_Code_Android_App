@@ -38,7 +38,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.example.brutemorse.data.UserSettings
+import com.example.brutemorse.model.UserSettings
 import com.example.brutemorse.model.MorseDefinitions
 import kotlinx.coroutines.delay
 

@@ -1,11 +1,13 @@
 package com.example.brutemorse.data
 
 import android.content.Context
+import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.example.brutemorse.model.UserSettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -14,7 +16,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
-private val Context.dataStore by preferencesDataStore("brute_morse_settings")
+private val Context.dataStore: DataStore<Preferences> by preferencesDataStore("brute_morse_settings")
 
 private object PreferenceKeys {
     val CALLSIGN = stringPreferencesKey("callsign")
@@ -22,21 +24,17 @@ private object PreferenceKeys {
     val WPM = intPreferencesKey("wpm")
     val TONE = intPreferencesKey("tone")
     val PHASE_SELECTION = stringPreferencesKey("phases")
+
+    // Per-phase repetition keys
+    val REPETITION_PHASE1_NESTED = intPreferencesKey("rep_phase1_nested")
+    val REPETITION_PHASE1_BCT = intPreferencesKey("rep_phase1_bct")
+    val REPETITION_PHASE2_NESTED = intPreferencesKey("rep_phase2_nested")
+    val REPETITION_PHASE2_BCT = intPreferencesKey("rep_phase2_bct")
+    val REPETITION_PHASE3_VOCAB = intPreferencesKey("rep_phase3_vocab")
+
     val MIGRATION_DONE = stringPreferencesKey("migration_v2_done")
     val LAST_PLAYBACK_INDEX = intPreferencesKey("last_playback_index")
     val LAST_ACTIVE_INDEX = intPreferencesKey("last_active_index")
-}
-
-data class UserSettings(
-    val callSign: String = "",
-    val friendCallSigns: List<String> = emptyList(),
-    val wpm: Int = 25,
-    val toneFrequencyHz: Int = 800,
-    val phaseSelection: Set<Int> = setOf(1, 2, 3, 4)
-) {
-    // Centralized timing configuration - computed from WPM
-    val timing: MorseTimingConfig
-        get() = MorseTimingConfig(wpm)
 }
 
 class SettingsRepository(private val context: Context) {
@@ -67,7 +65,6 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { prefs ->
             android.util.Log.d("SettingsRepository", "Starting migration v2...")
 
-            // ALWAYS reverse any existing data - the old code was buggy
             val callSign = prefs[PreferenceKeys.CALLSIGN]
             android.util.Log.d("SettingsRepository", "Current callsign: '$callSign'")
 
@@ -93,7 +90,6 @@ class SettingsRepository(private val context: Context) {
                 android.util.Log.d("SettingsRepository", "Reversed friends: '$friendString' -> '${fixedFriends.joinToString(",")}'")
             }
 
-            // Mark migration as complete
             prefs[PreferenceKeys.MIGRATION_DONE] = "true"
             android.util.Log.d("SettingsRepository", "Migration v2 complete!")
         }
@@ -106,6 +102,13 @@ class SettingsRepository(private val context: Context) {
             prefs[PreferenceKeys.WPM] = settings.wpm
             prefs[PreferenceKeys.TONE] = settings.toneFrequencyHz
             prefs[PreferenceKeys.PHASE_SELECTION] = settings.phaseSelection.sorted().joinToString(",")
+
+            // Save all repetition counts
+            prefs[PreferenceKeys.REPETITION_PHASE1_NESTED] = settings.repetitionPhase1NestedID
+            prefs[PreferenceKeys.REPETITION_PHASE1_BCT] = settings.repetitionPhase1BCT
+            prefs[PreferenceKeys.REPETITION_PHASE2_NESTED] = settings.repetitionPhase2NestedID
+            prefs[PreferenceKeys.REPETITION_PHASE2_BCT] = settings.repetitionPhase2BCT
+            prefs[PreferenceKeys.REPETITION_PHASE3_VOCAB] = settings.repetitionPhase3Vocab
         }
     }
 
@@ -137,9 +140,22 @@ class SettingsRepository(private val context: Context) {
         return UserSettings(
             callSign = this[PreferenceKeys.CALLSIGN].orEmpty(),
             friendCallSigns = friendString.split(',').filter { it.isNotBlank() },
-            wpm = this[PreferenceKeys.WPM] ?: 25,
-            toneFrequencyHz = this[PreferenceKeys.TONE] ?: 800,
-            phaseSelection = phaseString.split(',').mapNotNull { it.toIntOrNull() }.toSet().ifEmpty { setOf(1, 2, 3, 4) }
+            wpm = this[PreferenceKeys.WPM] ?: UserSettings.DEFAULT_WPM,
+            toneFrequencyHz = this[PreferenceKeys.TONE] ?: UserSettings.DEFAULT_TONE_HZ,
+            phaseSelection = phaseString.split(',').mapNotNull { it.toIntOrNull() }.toSet()
+                .ifEmpty { setOf(1, 2, 3, 4) },
+
+            // Load all repetition counts with defaults
+            repetitionPhase1NestedID = this[PreferenceKeys.REPETITION_PHASE1_NESTED]
+                ?: UserSettings.DEFAULT_REPETITION_LETTERS,
+            repetitionPhase1BCT = this[PreferenceKeys.REPETITION_PHASE1_BCT]
+                ?: UserSettings.DEFAULT_REPETITION_BCT,
+            repetitionPhase2NestedID = this[PreferenceKeys.REPETITION_PHASE2_NESTED]
+                ?: UserSettings.DEFAULT_REPETITION_NUMBERS,
+            repetitionPhase2BCT = this[PreferenceKeys.REPETITION_PHASE2_BCT]
+                ?: UserSettings.DEFAULT_REPETITION_BCT_MIX,
+            repetitionPhase3Vocab = this[PreferenceKeys.REPETITION_PHASE3_VOCAB]
+                ?: UserSettings.DEFAULT_REPETITION_VOCAB
         )
     }
 }

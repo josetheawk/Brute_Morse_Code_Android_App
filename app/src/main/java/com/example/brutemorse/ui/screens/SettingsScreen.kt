@@ -9,11 +9,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
@@ -29,14 +33,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import com.example.brutemorse.data.UserSettings
+import com.example.brutemorse.model.UserSettings
 
 @Composable
 fun SettingsScreen(
     settingsState: UserSettings,
     onSettingsChange: ((UserSettings) -> UserSettings) -> Unit,
     onNavigateUp: () -> Unit,
-    onOpenKeyerTest: () -> Unit = {}
+    onOpenKeyerTest: () -> Unit = {},
+    onOpenRepetitionSettings: () -> Unit = {}
 ) {
     var callSign by remember(settingsState.callSign) { mutableStateOf(settingsState.callSign) }
     var friends by remember(settingsState.friendCallSigns) {
@@ -52,7 +57,22 @@ fun SettingsScreen(
             .verticalScroll(scrollState),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text("Settings", style = MaterialTheme.typography.titleLarge)
+        // Header with back button
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onNavigateUp) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back"
+                )
+            }
+            Text("Settings", style = MaterialTheme.typography.titleLarge)
+            // Empty spacer for symmetry
+            IconButton(onClick = {}) {}
+        }
 
         // Personal Info Section
         Text("Personal Information", style = MaterialTheme.typography.titleMedium)
@@ -135,10 +155,27 @@ fun SettingsScreen(
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
+        // Repetition Settings Button
+        Text("Active Recall Settings", style = MaterialTheme.typography.titleMedium)
+
+        Button(
+            onClick = onOpenRepetitionSettings,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Configure Repetition Settings →")
+        }
+
+        Text(
+            "Customize how many times each element repeats per phase",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
         // Hardware Testing Section
         Text("Hardware Testing", style = MaterialTheme.typography.titleMedium)
 
-        // Warning card
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)

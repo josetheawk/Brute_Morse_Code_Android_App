@@ -1,3 +1,16 @@
+/*
+ * ============================================================================
+ * FILE: SessionRepository.kt
+ * LOCATION: app/src/main/java/com/example/brutemorse/data/SessionRepository.kt
+ * STATUS: ✅ FIXED - All timing type annotations added
+ *
+ * CHANGES MADE:
+ * - Line ~437: Added explicit MorseTimingConfig type in createNestedIDStep()
+ * - Line ~485: Added explicit MorseTimingConfig type in createSessionStepWithRepetition()
+ * - Line ~526: Added explicit MorseTimingConfig type in createSessionStep()
+ * ============================================================================
+ */
+
 package com.example.brutemorse.data
 
 import com.example.brutemorse.model.ChimeElement
@@ -9,6 +22,7 @@ import com.example.brutemorse.model.ScenarioScript
 import com.example.brutemorse.model.SessionStep
 import com.example.brutemorse.model.SilenceElement
 import com.example.brutemorse.model.SpeechElement
+import com.example.brutemorse.model.UserSettings
 import kotlinx.coroutines.flow.first
 import kotlin.math.ceil
 
@@ -44,38 +58,48 @@ class SessionRepository(private val settingsRepository: SettingsRepository) {
         val letters = MorseDefinitions.alphabet
         var subPhase = 1
 
-        // Phase 1.1 Nested Incremental
-        // Active Recall: repeat each letter 3 times
-        val nestedPasses = letters.indices.map { index ->
-            letters.subList(0, index + 1).flatMap { letter -> List(3) { letter } }
+        val forwardPasses = letters.indices.map { index ->
+            letters.subList(0, index + 1)
         }
-        nestedPasses.forEachIndexed { passIndex, pass ->
-            sequence += createSessionStep(
+        forwardPasses.forEachIndexed { passIndex, pass ->
+            sequence += createNestedIDStep(
                 settings = settings,
-                descriptor = PhaseDescriptor(phaseIndex, subPhase, "NestedID", "Forward incremental alphabet"),
+                repetitionCount = settings.repetitionPhase1NestedID,
+                descriptor = PhaseDescriptor(phaseIndex, subPhase, "NestedID Incremental", "Forward alphabet build"),
                 passIndex = passIndex,
-                passCount = nestedPasses.size,
-                tokens = pass
+                passCount = forwardPasses.size + letters.size,
+                uniqueTokens = pass
             )
         }
 
-        // Phase 1.2 BCT traversal with active recall
+        val reversedLetters = letters.reversed()
+        val decrementalPasses = reversedLetters.indices.map { index ->
+            reversedLetters.subList(0, index + 1)
+        }
+        decrementalPasses.forEachIndexed { passIndex, pass ->
+            sequence += createNestedIDStep(
+                settings = settings,
+                repetitionCount = settings.repetitionPhase1NestedID,
+                descriptor = PhaseDescriptor(phaseIndex, subPhase, "NestedID Decremental", "Reverse alphabet build"),
+                passIndex = forwardPasses.size + passIndex,
+                passCount = forwardPasses.size + decrementalPasses.size,
+                uniqueTokens = pass
+            )
+        }
+
         subPhase++
         val bctSequence = bctTraversal(center = letters.size / 2, size = letters.size, direction = 1, coprime = 5)
         bctSequence.forEachIndexed { index, letterIndex ->
-            // Repeat each letter 3 times for active recall
-            val letter = List(3) { letters[letterIndex] }
-            sequence += createSessionStep(
+            val repeatedLetter = List(settings.repetitionPhase1BCT) { letters[letterIndex] }
+            sequence += createSessionStepWithRepetition(
                 settings = settings,
                 descriptor = PhaseDescriptor(phaseIndex, subPhase, "BCT", "Balanced coprime traversal"),
                 passIndex = index,
                 passCount = bctSequence.size,
-                tokens = letter,
-                voiceMultiplier = (index % 4) + 1
+                tokens = repeatedLetter
             )
         }
 
-        // Phase 1.3 Digraph progressive build
         subPhase++
         MorseDefinitions.digraphs.forEachIndexed { passIndex, digraph ->
             val builds = digraph.indices.map { idx -> digraph.substring(0, idx + 1) }
@@ -91,7 +115,6 @@ class SessionRepository(private val settingsRepository: SettingsRepository) {
             }
         }
 
-        // Phase 1.4 Tongue twisters (confusable sets)
         subPhase++
         val confusionSets = listOf(
             listOf("E", "I", "S", "H"),
@@ -122,35 +145,49 @@ class SessionRepository(private val settingsRepository: SettingsRepository) {
 
         val numbers = MorseDefinitions.numbers
 
-        // Phase 2.1 Nested numbers
-        val nestedNumbers = numbers.indices.map { index ->
-            numbers.subList(0, index + 1).flatMap { number -> List(3) { number } }
+        val forwardPasses = numbers.indices.map { index ->
+            numbers.subList(0, index + 1)
         }
-        nestedNumbers.forEachIndexed { passIndex, pass ->
-            sequence += createSessionStep(
+        forwardPasses.forEachIndexed { passIndex, pass ->
+            sequence += createNestedIDStep(
                 settings = settings,
-                descriptor = PhaseDescriptor(phaseIndex, subPhase, "NestedID", "Numbers incremental"),
+                repetitionCount = settings.repetitionPhase2NestedID,
+                descriptor = PhaseDescriptor(phaseIndex, subPhase, "NestedID Incremental", "Forward numbers build"),
                 passIndex = passIndex,
-                passCount = nestedNumbers.size,
-                tokens = pass
+                passCount = forwardPasses.size + numbers.size,
+                uniqueTokens = pass
             )
         }
 
-        // Phase 2.2 Full BCT letters + numbers
+        val reversedNumbers = numbers.reversed()
+        val decrementalPasses = reversedNumbers.indices.map { index ->
+            reversedNumbers.subList(0, index + 1)
+        }
+        decrementalPasses.forEachIndexed { passIndex, pass ->
+            sequence += createNestedIDStep(
+                settings = settings,
+                repetitionCount = settings.repetitionPhase2NestedID,
+                descriptor = PhaseDescriptor(phaseIndex, subPhase, "NestedID Decremental", "Reverse numbers build"),
+                passIndex = forwardPasses.size + passIndex,
+                passCount = forwardPasses.size + decrementalPasses.size,
+                uniqueTokens = pass
+            )
+        }
+
         subPhase++
         val combined = MorseDefinitions.alphabet + numbers
         val bctSequence = bctTraversal(center = combined.size / 2, size = combined.size, direction = -1, coprime = 7)
         bctSequence.forEachIndexed { index, tokenIndex ->
-            sequence += createSessionStep(
+            val repeatedToken = List(settings.repetitionPhase2BCT) { combined[tokenIndex] }
+            sequence += createSessionStepWithRepetition(
                 settings = settings,
                 descriptor = PhaseDescriptor(phaseIndex, subPhase, "BCT", "Mixed set traversal"),
                 passIndex = index,
                 passCount = bctSequence.size,
-                tokens = listOf(combined[tokenIndex])
+                tokens = repeatedToken
             )
         }
 
-        // Phase 2.3 Number-letter confusion
         subPhase++
         val confusionSets = listOf(
             listOf("5", "S", "H"),
@@ -174,7 +211,6 @@ class SessionRepository(private val settingsRepository: SettingsRepository) {
             )
         }
 
-        // Phase 2.4 Number sequences
         subPhase++
         val sequences = listOf(
             listOf("5", "9", "9"),
@@ -200,18 +236,17 @@ class SessionRepository(private val settingsRepository: SettingsRepository) {
         val sequence = mutableListOf<SessionStep>()
         var subPhase = 1
 
-        // Phase 3.1 Vocabulary introduction
         MorseDefinitions.hamVocabulary.forEachIndexed { passIndex, token ->
-            sequence += createSessionStep(
+            sequence += createNestedIDStep(
                 settings = settings,
+                repetitionCount = settings.repetitionPhase3Vocab,
                 descriptor = PhaseDescriptor(phaseIndex, subPhase, "Vocabulary", "Ham terms"),
                 passIndex = passIndex,
                 passCount = MorseDefinitions.hamVocabulary.size,
-                tokens = listOf(token)
+                uniqueTokens = listOf(token)
             )
         }
 
-        // Phase 3.2 Q-code tongue twisters
         subPhase++
         val qcodes = listOf(
             listOf("CQ", "QRZ", "QTH"),
@@ -229,7 +264,6 @@ class SessionRepository(private val settingsRepository: SettingsRepository) {
             )
         }
 
-        // Phase 3.3 Reduced vocal support
         subPhase++
         val reducedSupportTerms = MorseDefinitions.hamVocabulary.shuffled().take(12)
         reducedSupportTerms.forEachIndexed { passIndex, token ->
@@ -243,7 +277,6 @@ class SessionRepository(private val settingsRepository: SettingsRepository) {
             )
         }
 
-        // Phase 3.4 Mixed confusion sets
         subPhase++
         val mixedSets = listOf(
             listOf("CQ", "DE", "K"),
@@ -270,7 +303,6 @@ class SessionRepository(private val settingsRepository: SettingsRepository) {
         var subPhase = 0
         var scriptCounter = 0
 
-        // Phase 4.0 Vocabulary review
         sequence += createSessionStep(
             settings = settings,
             descriptor = PhaseDescriptor(phaseIndex, subPhase, "Vocabulary review", "Morse majority"),
@@ -280,7 +312,6 @@ class SessionRepository(private val settingsRepository: SettingsRepository) {
             voiceMultiplier = 1
         )
 
-        // Scenario playback sections
         ScenarioLibrary.defaultScenarios.groupBy { it.category }.toSortedMap(compareBy { it.ordinal }).forEach { (category, scripts) ->
             scripts.forEachIndexed { index, script ->
                 subPhase++
@@ -312,6 +343,106 @@ class SessionRepository(private val settingsRepository: SettingsRepository) {
         return sequence
     }
 
+    // ✅ FIX 1: Explicit type annotation added
+    private fun createNestedIDStep(
+        settings: UserSettings,
+        repetitionCount: Int,
+        descriptor: PhaseDescriptor,
+        passIndex: Int,
+        passCount: Int,
+        uniqueTokens: List<String>,
+        elementIndex: Int = 0
+    ): SessionStep {
+        val playback = mutableListOf<com.example.brutemorse.model.PlaybackElement>()
+
+        // ✅ FIX: Explicit type annotation
+        val timing: com.example.brutemorse.data.MorseTimingConfig = settings.timing
+
+        uniqueTokens.forEach { token ->
+            repeat(repetitionCount) { repIndex ->
+                val morse = MorseDefinitions.morseMap[token] ?: token.toCharArray().joinToString(" ") { char ->
+                    MorseDefinitions.morseMap[char.toString()].orEmpty()
+                }
+                val normalized = if (morse.isBlank()) "·" else morse
+                val duration = MorseTimingConfig.calculateDuration(normalized, timing)
+
+                playback += MorseElement(
+                    symbol = normalized,
+                    character = token,
+                    wpm = settings.wpm,
+                    toneFrequencyHz = settings.toneFrequencyHz,
+                    durationMillis = duration
+                )
+
+                val hasVocal = repIndex < 3 || (repIndex >= 3 && (repIndex - 2) % 5 == 0)
+
+                if (hasVocal) {
+                    playback += SpeechElement(token, durationMillis = 750L)
+                }
+
+                playback += SilenceElement(durationMillis = timing.interCharacterGapMs)
+            }
+        }
+        playback += ChimeElement()
+
+        return SessionStep(
+            descriptor = descriptor,
+            passIndex = passIndex,
+            passCount = passCount,
+            elementIndex = elementIndex,
+            elements = playback
+        )
+    }
+
+    // ✅ FIX 2: Explicit type annotation added
+    private fun createSessionStepWithRepetition(
+        settings: UserSettings,
+        descriptor: PhaseDescriptor,
+        passIndex: Int,
+        passCount: Int,
+        tokens: List<String>,
+        elementIndex: Int = 0
+    ): SessionStep {
+        val playback = mutableListOf<com.example.brutemorse.model.PlaybackElement>()
+
+        // ✅ FIX: Explicit type annotation
+        val timing: com.example.brutemorse.data.MorseTimingConfig = settings.timing
+
+        tokens.forEachIndexed { index, token ->
+            val morse = MorseDefinitions.morseMap[token] ?: token.toCharArray().joinToString(" ") { char ->
+                MorseDefinitions.morseMap[char.toString()].orEmpty()
+            }
+            val normalized = if (morse.isBlank()) "·" else morse
+            val duration = MorseTimingConfig.calculateDuration(normalized, timing)
+
+            playback += MorseElement(
+                symbol = normalized,
+                character = token,
+                wpm = settings.wpm,
+                toneFrequencyHz = settings.toneFrequencyHz,
+                durationMillis = duration
+            )
+
+            val hasVocal = index < 3 || (index >= 3 && (index - 2) % 5 == 0)
+
+            if (hasVocal) {
+                playback += SpeechElement(token, durationMillis = 750L)
+            }
+
+            playback += SilenceElement(durationMillis = timing.interCharacterGapMs)
+        }
+        playback += ChimeElement()
+
+        return SessionStep(
+            descriptor = descriptor,
+            passIndex = passIndex,
+            passCount = passCount,
+            elementIndex = elementIndex,
+            elements = playback
+        )
+    }
+
+    // ✅ FIX 3: Explicit type annotation added
     private fun createSessionStep(
         settings: UserSettings,
         descriptor: PhaseDescriptor,
@@ -322,7 +453,9 @@ class SessionRepository(private val settingsRepository: SettingsRepository) {
         elementIndex: Int = 0
     ): SessionStep {
         val playback = mutableListOf<com.example.brutemorse.model.PlaybackElement>()
-        val timing = settings.timing // Use centralized timing configuration
+
+        // ✅ FIX: Explicit type annotation
+        val timing: com.example.brutemorse.data.MorseTimingConfig = settings.timing
 
         tokens.forEachIndexed { index, token ->
             val morse = MorseDefinitions.morseMap[token] ?: token.toCharArray().joinToString(" ") { char ->
@@ -330,6 +463,7 @@ class SessionRepository(private val settingsRepository: SettingsRepository) {
             }
             val normalized = if (morse.isBlank()) "·" else morse
             val duration = MorseTimingConfig.calculateDuration(normalized, timing)
+
             playback += MorseElement(
                 symbol = normalized,
                 character = token,
@@ -337,6 +471,7 @@ class SessionRepository(private val settingsRepository: SettingsRepository) {
                 toneFrequencyHz = settings.toneFrequencyHz,
                 durationMillis = duration
             )
+
             if (voiceMultiplier > 0 && index % voiceMultiplier == 0) {
                 playback += SpeechElement(token, durationMillis = 750L)
             } else if (voiceMultiplier == 0) {
@@ -357,7 +492,6 @@ class SessionRepository(private val settingsRepository: SettingsRepository) {
 
     private fun bctTraversal(center: Int, size: Int, direction: Int, coprime: Int): List<Int> {
         val sequence = mutableListOf<Int>()
-        // Add random starting offset to avoid always starting at same position
         val randomOffset = kotlin.random.Random.nextInt(size)
         for (i in 0 until size) {
             val offset = ceil(i / 2.0).toInt()

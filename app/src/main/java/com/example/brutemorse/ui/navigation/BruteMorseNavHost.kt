@@ -1,8 +1,28 @@
+/*
+ * ============================================================================
+ * FILE: BruteMorseNavHost.kt
+ * LOCATION: app/src/main/java/com/example/brutemorse/ui/navigation/BruteMorseNavHost.kt
+ * STATUS: ✅ FIXED - All StateFlow collections use proper delegation
+ *
+ * CHANGES MADE:
+ * - Added import: androidx.compose.runtime.getValue (Line ~8)
+ * - Line ~62: Listen screen - extracted state with 'by' delegation
+ * - Line ~89: Active screen - extracted state with 'by' delegation
+ * - Line ~108: FreePractice screen - extracted settingsState with 'by' delegation
+ * - Line ~122: TimingPractice screen - extracted settingsState with 'by' delegation
+ * - Line ~134: Challenges screen - extracted settingsState with 'by' delegation
+ * - Line ~150: Settings screen - extracted settingsState with 'by' delegation
+ * - Line ~164: KeyerTest screen - extracted keyerState with 'by' delegation
+ * - Line ~173: RepetitionSettings screen - extracted settingsState with 'by' delegation
+ * ============================================================================
+ */
+
 package com.example.brutemorse.ui.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue  // ✅ FIX: Added import for 'by' delegation
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -14,6 +34,7 @@ import com.example.brutemorse.ui.screens.FreePracticeScreen
 import com.example.brutemorse.ui.screens.KeyerTestScreen
 import com.example.brutemorse.ui.screens.ListenScreen
 import com.example.brutemorse.ui.screens.MainMenuScreen
+import com.example.brutemorse.ui.screens.RepetitionSettingsScreen
 import com.example.brutemorse.ui.screens.ScenarioLibraryScreen
 import com.example.brutemorse.ui.screens.SettingsScreen
 import com.example.brutemorse.ui.screens.TimingPracticeScreen
@@ -28,6 +49,7 @@ sealed class Screen(val route: String) {
     data object Settings : Screen("settings")
     data object Scenarios : Screen("scenarios")
     data object KeyerTest : Screen("keyer_test")
+    data object RepetitionSettings : Screen("repetition_settings")
 }
 
 @Composable
@@ -79,8 +101,11 @@ fun BruteMorseNavHost(
         }
 
         composable(Screen.Listen.route) {
+            // ✅ FIX: Extract state using 'by' delegation instead of .value
+            val state by playbackViewModel.uiState.collectAsState()
+
             ListenScreen(
-                state = playbackViewModel.uiState.collectAsState().value,
+                state = state,
                 onPlayPause = playbackViewModel::togglePlayback,
                 onSkipNext = playbackViewModel::skipNext,
                 onSkipPrevious = playbackViewModel::skipPrevious,
@@ -101,8 +126,11 @@ fun BruteMorseNavHost(
         }
 
         composable(Screen.Active.route) {
+            // ✅ FIX: Extract state using 'by' delegation
+            val state by playbackViewModel.activeState.collectAsState()
+
             ActiveScreen(
-                state = playbackViewModel.activeState.collectAsState().value,
+                state = state,
                 onKeyDown = playbackViewModel::onActiveKeyDown,
                 onKeyUp = playbackViewModel::onActiveKeyUp,
                 onNextSet = playbackViewModel::onActiveNextSet,
@@ -122,6 +150,9 @@ fun BruteMorseNavHost(
         }
 
         composable(Screen.FreePractice.route) {
+            // ✅ FIX: Extract settingsState using 'by' delegation
+            val settingsState by playbackViewModel.settingsState.collectAsState()
+
             FreePracticeScreen(
                 onNavigateHome = {
                     playbackViewModel.stopMorsePlayback()
@@ -133,11 +164,14 @@ fun BruteMorseNavHost(
                 onKeyUp = playbackViewModel::onActiveKeyUp,
                 onPlayback = playbackViewModel::playMorsePattern,
                 onStopPlayback = playbackViewModel::stopMorsePlayback,
-                settingsState = playbackViewModel.settingsState.collectAsState().value
+                settingsState = settingsState
             )
         }
 
         composable(Screen.TimingPractice.route) {
+            // ✅ FIX: Extract settingsState using 'by' delegation
+            val settingsState by playbackViewModel.settingsState.collectAsState()
+
             TimingPracticeScreen(
                 onNavigateHome = {
                     navController.navigate(Screen.MainMenu.route) {
@@ -146,11 +180,14 @@ fun BruteMorseNavHost(
                 },
                 onKeyDown = playbackViewModel::onActiveKeyDown,
                 onKeyUp = playbackViewModel::onActiveKeyUp,
-                settingsState = playbackViewModel.settingsState.collectAsState().value
+                settingsState = settingsState
             )
         }
 
         composable(Screen.Challenges.route) {
+            // ✅ FIX: Extract settingsState using 'by' delegation
+            val settingsState by playbackViewModel.settingsState.collectAsState()
+
             ChallengesScreen(
                 onNavigateHome = {
                     playbackViewModel.stopMorsePlayback()
@@ -162,16 +199,20 @@ fun BruteMorseNavHost(
                 onKeyUp = playbackViewModel::onActiveKeyUp,
                 onPlayback = playbackViewModel::playMorsePattern,
                 onStopPlayback = playbackViewModel::stopMorsePlayback,
-                settingsState = playbackViewModel.settingsState.collectAsState().value
+                settingsState = settingsState
             )
         }
 
         composable(Screen.Settings.route) {
+            // ✅ FIX: Extract settingsState using 'by' delegation
+            val settingsState by playbackViewModel.settingsState.collectAsState()
+
             SettingsScreen(
-                settingsState = playbackViewModel.settingsState.collectAsState().value,
+                settingsState = settingsState,
                 onSettingsChange = playbackViewModel::updateSettings,
                 onNavigateUp = { navController.popBackStack() },
-                onOpenKeyerTest = { navController.navigate(Screen.KeyerTest.route) }
+                onOpenKeyerTest = { navController.navigate(Screen.KeyerTest.route) },
+                onOpenRepetitionSettings = { navController.navigate(Screen.RepetitionSettings.route) }
             )
         }
 
@@ -183,11 +224,25 @@ fun BruteMorseNavHost(
         }
 
         composable(Screen.KeyerTest.route) {
+            // ✅ FIX: Extract keyerState using 'by' delegation
+            val keyerState by playbackViewModel.keyerTestState.collectAsState()
+
             KeyerTestScreen(
                 onNavigateBack = { navController.popBackStack() },
                 onStartListening = playbackViewModel::startKeyerTest,
                 onStopListening = playbackViewModel::stopKeyerTest,
-                keyerState = playbackViewModel.keyerTestState.collectAsState().value
+                keyerState = keyerState
+            )
+        }
+
+        composable(Screen.RepetitionSettings.route) {
+            // ✅ FIX: Extract settingsState using 'by' delegation
+            val settingsState by playbackViewModel.settingsState.collectAsState()
+
+            RepetitionSettingsScreen(
+                settingsState = settingsState,
+                onSettingsChange = playbackViewModel::updateSettings,
+                onNavigateUp = { navController.popBackStack() }
             )
         }
     }
