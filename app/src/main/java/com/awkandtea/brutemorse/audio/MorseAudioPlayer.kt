@@ -21,20 +21,30 @@ class MorseAudioPlayer(private val context: Context) {
         frequencyHz: Int,
         wpm: Int
     ) = withContext(Dispatchers.IO) {
-        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        val previousMode = audioManager.mode
-        val previousSpeakerphone = audioManager.isSpeakerphoneOn
-
-        audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
-        audioManager.isSpeakerphoneOn = true
+        // ✅ Removed MODE_IN_COMMUNICATION - it was causing issues with rapid short beeps
+        // That mode has echo cancellation that fights against morse code
 
         try {
             val timing = com.awkandtea.brutemorse.data.MorseTimingConfig(wpm)
-            val totalDurationMs = com.awkandtea.brutemorse.data.MorseTimingConfig.calculateDuration(pattern, timing)
-            val totalSamples = (totalDurationMs * sampleRate / 1000).toInt()
+
+            // ✅ FIX: Calculate buffer size to match what we'll actually write
+            var calculatedSamples = 0L
+            pattern.forEach { char ->
+                when (char) {
+                    '.', '·', '•' -> calculatedSamples += (timing.ditMs * sampleRate / 1000)
+                    '-', '−', '–', '—' -> calculatedSamples += (timing.dahMs * sampleRate / 1000)
+                    ' ' -> calculatedSamples += (timing.interCharacterGapMs * sampleRate / 1000)
+                }
+                // Add intra-character gap after each element
+                if (char != ' ') {
+                    calculatedSamples += (timing.intraCharacterGapMs * sampleRate / 1000)
+                }
+            }
+
+            val totalSamples = calculatedSamples.toInt()
 
             if (totalSamples <= 0) {
-                android.util.Log.w("MorseAudioPlayer", "Invalid pattern duration: $totalDurationMs ms")
+                android.util.Log.w("MorseAudioPlayer", "Invalid pattern duration")
                 return@withContext
             }
 
@@ -80,12 +90,23 @@ class MorseAudioPlayer(private val context: Context) {
                 }
             }
 
-            playAudioBuffer(samples, sampleRate)
+            // ✅ FIX: For very short sounds, add silence padding to ensure AudioTrack has time to play
+            val actualAudioMs = (currentSampleOffset * 1000L) / sampleRate
+            val minBufferDurationMs = 200L  // Minimum 200ms total buffer for AudioTrack stability
+
+            if (actualAudioMs < minBufferDurationMs) {
+                val paddingSamples = ((minBufferDurationMs - actualAudioMs) * sampleRate / 1000).toInt()
+                // Resize array to include padding (array is already zero-filled = silence)
+                val paddedSamples = ShortArray(currentSampleOffset + paddingSamples)
+                System.arraycopy(samples, 0, paddedSamples, 0, currentSampleOffset)
+
+                android.util.Log.d("MorseAudioPlayer", "Short audio (${actualAudioMs}ms), padded to ${minBufferDurationMs}ms")
+                playAudioBuffer(paddedSamples, sampleRate)
+            } else {
+                playAudioBuffer(samples, sampleRate)
+            }
         } catch (e: Exception) {
             android.util.Log.e("MorseAudioPlayer", "Error playing morse pattern", e)
-        } finally {
-            audioManager.mode = previousMode
-            audioManager.isSpeakerphoneOn = previousSpeakerphone
         }
     }
 
@@ -182,8 +203,10 @@ class MorseAudioPlayer(private val context: Context) {
             return
         }
 
-        val fadeMs = 3
-        val fadeSamples = (fadeMs * sampleRate / 1000).coerceAtMost(numSamples / 2)
+        // ✅ FIX: Shorter fade for very short sounds like 'e'
+        val isVeryShort = numSamples < (sampleRate * 0.08) // < 80ms
+        val fadeMs = if (isVeryShort) 1 else 3
+        val fadeSamples = (fadeMs * sampleRate / 1000).coerceAtMost(numSamples / 4)
 
         val maxSamples = (buffer.size - startOffset).coerceAtMost(numSamples)
 
@@ -241,6 +264,7 @@ class MorseAudioPlayer(private val context: Context) {
                 offset += written
             }
 
+            // Wait for the full buffer duration (includes padding for short sounds)
             val durationMs = samples.size * 1000L / sampleRate
             kotlinx.coroutines.delay(durationMs)
 

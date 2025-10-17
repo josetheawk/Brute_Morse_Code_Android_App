@@ -20,7 +20,6 @@ class MainActivity : ComponentActivity() {
     private val playbackViewModel: PlaybackViewModel by viewModels {
         val app = application as BruteMorseApp
         PlaybackViewModelFactory(app.sessionRepository, app.settingsRepository, applicationContext)
-
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -34,4 +33,3 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
-
